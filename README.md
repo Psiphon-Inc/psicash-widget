@@ -1,5 +1,11 @@
 # PsiCash Widget
 
+## TODO
+
+* Create a generator. Have it take the widget origin, API server hostname, etc., and produce the minified files.
+  - Enable the CSP meta tag in `iframe.html` and generate the `default-src` part as well.
+* Create a file server. Have it listen to different ports for landing page and widget files. Maybe in conjunction with the generator.
+
 ## Testing
 
 Two separate static file servers are needed to emulate separate origins for the landing page, the widget server, and the API server.
