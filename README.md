@@ -4,7 +4,7 @@
 
 Two separate static file servers are needed to emulate separate origins for the landing page, the widget server, and the API server.
 
-Run two file servers in the widget directory. Like:
+Run two file servers in the `client/widget` directory. Like:
 
 ```no-highlight
 # In one terminal:
@@ -49,7 +49,7 @@ The landing page includes a script tag for `psicash.js`. It provides the disting
 
 ```html
 <script async defer
-  src="https://widget.psi.cash/psicash.js?distinguisher=psip.me">
+  src="https://widget.psi.cash/v1/psicash.js?distinguisher=psip.me">
 </script>
 ```
 
@@ -61,13 +61,13 @@ The landing page includes a script tag for `psicash.js`. It provides the disting
 
 ```html
 <iframe
-  src="https://widget.psi.cash/iframe.html#tokens=<token>&distinguisher=psip.me">
+  src="https://widget.psi.cash/v1/iframe.html#tokens=<token>&distinguisher=psip.me">
 </iframe>
 ```
 
 ### Iframe loads widget script
 
-Iframe loads `widget.psi.cash/iframe.js`. No special params are necessary as they are accessible from the iframe's `window.location`.
+Iframe loads `widget.psi.cash/v1/iframe.js`. No special params are necessary as they are accessible from the iframe's `window.location`.
 
 The iframe script loads tokens out of local storage, if they exist. We'll call those the stored-tokens.
 
@@ -88,7 +88,7 @@ The iframe script verifies that the distinguisher is valid for the landing page.
 Iframe makes a page view reward request to:
 
 ```
-https://api.psi.cash/api/transaction?class=page-view&distinguisher=psip.me"
+https://api.psi.cash/v1/transaction?class=page-view&distinguisher=psip.me"
     X-PsiCash-Auth:<token>
 ```
 

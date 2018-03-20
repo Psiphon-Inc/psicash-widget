@@ -6,6 +6,7 @@
 
   var PSICASH_SERVER_SCHEME = 'http'; // TODO: update
   var PSICASH_SERVER_HOSTNAME = 'localhost:51337'; // TODO: update
+  var PSICASH_API_VERSION = 'v1';
 
   var NEXTALLOWED_LOCALSTORAGE_KEY_PREFIX = 'NextAllowed::';
 
@@ -99,7 +100,8 @@
 
   // Make a page-view reward request for the current distinguisher.
   function makePageViewRewardRequest(tokens, distinguisher) {
-    var reqURL = PSICASH_SERVER_SCHEME + '://' + PSICASH_SERVER_HOSTNAME + '/transaction';
+    var reqURL = PSICASH_SERVER_SCHEME + '://' + PSICASH_SERVER_HOSTNAME +
+      '/' + PSICASH_API_VERSION + '/transaction';
     reqURL += '?class=page-view&distinguisher=' + distinguisher;
 
     var xhr = new(window.XMLHttpRequest || window.ActiveXObject)('MSXML2.XMLHTTP.3.0');
