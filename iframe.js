@@ -59,6 +59,13 @@
     }
   }
 
+  // Checks if the given distinguisher is valid for the referring page.
+  function validateDistinguisher(distinguisher) {
+    // Distinguishers don't use scheme, so strip it off.
+    var parent = new RegExp('https?://(.+)').exec(document.referrer)[1];
+    return parent.indexOf(distinguisher) === 0;
+  }
+
   // Check if the reward transaction is allowed for this page yet.
   function isRewardAllowed(distinguisher) {
     if (!window.localStorage) {
@@ -153,9 +160,19 @@
       return;
     }
 
-    if (isRewardAllowed(distinguisher)) {
-      makePageViewRewardRequest(tokens, distinguisher);
+    if (!validateDistinguisher(distinguisher)) {
+      // Can't continue with the earning request.
+      log('PsiCash: Distinguisher invalid for landing page: ' + distinguisher);
+      return;
     }
+
+    if (!isRewardAllowed(distinguisher)) {
+      // The check will log details.
+      return;
+    }
+
+    // We're okay to make the request.
+    makePageViewRewardRequest(tokens, distinguisher);
   })();
 
 })();

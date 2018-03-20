@@ -3,7 +3,7 @@
 
   var TOKENS_PARAM = 'tokens';
   var DISTINGUISHER_PARAM = 'distinguisher';
-  var IFRAME_URL = 'http://localhost:54322/iframe.html'; // TODO: update
+  var IFRAME_URL = 'http://localhost:12345/iframe.html'; // TODO: update
 
   // Loads the widget iframe into the page.
   function loadIframe() {

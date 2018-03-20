@@ -13,9 +13,13 @@ $ python -m SimpleHTTPServer 54321
 $ python -m SimpleHTTPServer 12345
 ```
 
-You will need to modify `landing.html` to refer to `psicash.js` at `localhost:12345` or whatever port you used for the second file server.
+In order for the transaction to succeed, there will need to be a `transaction_type` record with a distinguisher of `localhost` or `localhost:54321` or `localhost:54321/landing`, etc.
+
+You will need to modify `landing.html` to refer to `psicash.js` at `localhost:12345` or whatever port you used for the second file server. Also modify the `distinguisher=` param to match the localhost server and distinguisher.
 
 Also modify `IFRAME_URL` in `psicash.js` to use `localhost:12345`.
+
+You will also have to modify the API server config to indicate the localhost origin for the widget requests. In `config_override.toml`, in the `[cors]` section, add a setting like `widget_origin = "http://localhost:12345"`. Restart the server.
 
 You can then access the landing page, which embeds the widget, at:
 http://localhost:54321/landing.html
@@ -78,6 +82,8 @@ https://stackoverflow.com/questions/38584273/local-storage-cross-domain-safari-d
 https://webkit.org/blog/7675/intelligent-tracking-prevention/
 
 The distinguisher is retrieved from the URL param.
+
+The iframe script verifies that the distinguisher is valid for the landing page.
 
 Iframe makes a page view reward request to:
 
