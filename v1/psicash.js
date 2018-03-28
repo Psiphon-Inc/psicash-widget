@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var TOKENS_PARAM = 'tokens';
+  var TOKENS_PARAM = 'psicash'; // The reason this isn't named "tokens" is to minimize confict with other page params.
   var DISTINGUISHER_PARAM = 'distinguisher';
   var IFRAME_URL = 'http://localhost:12345/v1/iframe.html'; // TODO: update to use https://widget.psi.cash
 

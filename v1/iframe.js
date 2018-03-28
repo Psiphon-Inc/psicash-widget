@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var TOKENS_PARAM = 'tokens';
+  var TOKENS_PARAM = 'psicash';
   var DISTINGUISHER_PARAM = 'distinguisher';
 
   var PSICASH_SERVER_SCHEME = 'http'; // TODO: update

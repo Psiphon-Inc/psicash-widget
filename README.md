@@ -28,7 +28,7 @@ Also modify `IFRAME_URL` in `psicash.js` to use `localhost:12345`.
 You will also have to modify the API server config to indicate the localhost origin for the widget requests. In `config_override.toml`, in the `[cors]` section, add a setting like `widget_origin = "http://localhost:12345"`. Restart the server.
 
 You can then access the landing page, which embeds the widget, at:
-http://localhost:54321/landing.html
+`http://localhost:54321/landing.html#psicash=<tokens>`
 
 
 ## How it works
@@ -67,7 +67,7 @@ The landing page includes a script tag for `psicash.js`. It provides the disting
 
 ```html
 <iframe
-  src="https://widget.psi.cash/v1/iframe.html#tokens=<token>&distinguisher=psip.me">
+  src="https://widget.psi.cash/v1/iframe.html#psicash=<token>&distinguisher=psip.me">
 </iframe>
 ```
 
