@@ -10,7 +10,9 @@
 
   var NEXTALLOWED_LOCALSTORAGE_KEY_PREFIX = 'NextAllowed::';
 
-  // Get the tokens we should use for the reward transaction.
+  /**
+   * Get the tokens we should use for the reward transaction.
+   */
   function getTokens() {
     var paramTokens = getParam(location.href, TOKENS_PARAM);
 

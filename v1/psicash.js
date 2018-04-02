@@ -29,7 +29,7 @@
     iframe.src = iframeSrc;
 
     // Make invisible.
-    iframe.style = 'width:0;height:0;border:0;border:none;position:absolute;';
+    iframe.style.cssText = 'width:0;height:0;border:0;border:none;position:absolute;';
 
     document.body.appendChild(iframe);
   }
@@ -37,6 +37,10 @@
   // Get the src from the current script's tag. This can be used for retrieving params.
   function getCurrentScriptURL() {
     var thisScript = document.currentScript || document.querySelector('script[src*="psicash.js"]');
+
+    // Give TS error: "Property 'src' does not exist on type 'HTMLScriptElement | SVGScriptElement'."
+    // But we know it's the former (which has a src) and not the latter.
+    // @ts-ignore
     return thisScript.src;
   }
 
