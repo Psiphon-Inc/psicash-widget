@@ -23,8 +23,8 @@
   var TOKENS_PARAM = 'psicash';
   var DISTINGUISHER_PARAM = 'distinguisher';
 
-  var PSICASH_SERVER_SCHEME = 'http'; // TODO: update
-  var PSICASH_SERVER_HOSTNAME = 'localhost:51337'; // TODO: update
+  var PSICASH_SERVER_SCHEME = 'https';
+  var PSICASH_SERVER_HOSTNAME = 'api.psi.cash';
   var PSICASH_API_VERSION = 'v1';
 
   var NEXTALLOWED_LOCALSTORAGE_KEY_PREFIX = 'NextAllowed::';

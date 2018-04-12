@@ -22,7 +22,7 @@
 
   var TOKENS_PARAM = 'psicash'; // The reason this isn't named "tokens" is to minimize confict with other page params.
   var DISTINGUISHER_PARAM = 'distinguisher';
-  var IFRAME_URL = 'https://widget.psi.cash/v1/iframe.html';
+  var IFRAME_URL = 'https://widget.psi.cash/v1/iframe.debug.html'; // DEBUG
 
   // Loads the widget iframe into the page.
   function loadIframe() {
@@ -48,7 +48,7 @@
     iframe.src = iframeSrc;
 
     // Make invisible.
-    iframe.style.cssText = 'width:0;height:0;border:0;border:none;position:absolute;';
+    iframe.style.cssText = 'width:400px;height:400px;'; // DEBUG
 
     document.body.appendChild(iframe);
   }
