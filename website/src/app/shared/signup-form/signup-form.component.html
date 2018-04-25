@@ -1,0 +1,34 @@
+<h3>Signup Form</h3>
+<form [formGroup]="signupForm" (ngSubmit)="onSubmit(signupForm)" novalidate>
+  <div>
+    <label>
+      <span>Email address</span>
+      <input
+        type="email"
+        formControlName="email"
+        placeholder="Your email address">
+    </label>
+    <label>
+      <span>Confirm address</span>
+      <input
+        type="email"
+        formControlName="confirmEmail"
+        placeholder="Confirm your email address">
+    </label>
+    <label>
+      <span>Password</span>
+      <input
+        type="password"
+        formControlName="password"
+        placeholder="Enter a password">
+    </label>
+    <label>
+      <span>Confirm password</span>
+      <input
+        type="password"
+        formControlName="confirmPassword"
+        placeholder="Confirm your password">
+    </label>
+  </div>
+  <button type="submit">Sign up</button>
+</form>
