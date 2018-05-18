@@ -41,7 +41,7 @@ The app will open the landing page, passing the earner token to it via a hash pa
 https://psip.me/#psicash=<tokens>
 ```
 
-If the landing page aleady using a hash/anchor, then the tokens may be passed via a query param:
+If the landing page is already using a hash/anchor, then the tokens may be passed via a query param:
 
 ```no-highlight
 https://psip.me/?psicash=<tokens>
