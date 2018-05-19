@@ -89,7 +89,7 @@
     }
 
     // Side-effect: Store the paramTokens locally, if available.
-    if (tokensToUse && window.localStorage) {
+    if (tokensToUse && tokensToUse != localTokens && window.localStorage) {
       localStorage.setItem(tokensKey, tokensToUse);
     }
 

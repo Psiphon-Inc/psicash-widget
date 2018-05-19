@@ -163,7 +163,7 @@
       localTokens = localStorage.getItem(tokensKey);
 
       // Side-effect: Store the paramTokens locally, if available.
-      if (paramTokens) {
+      if (paramTokens && paramTokens != localTokens) {
         localStorage.setItem(tokensKey, paramTokens);
       }
     }
