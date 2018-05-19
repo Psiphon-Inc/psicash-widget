@@ -46,16 +46,27 @@
    */
   var IFRAME_DISTINGUISHER_PARAM = 'distinguisher';
   /**
+   * The widget (and iframe) origin.
+   * @const {string}
+   */
+  var WIDGET_ORIGIN = 'https://widget.psi.cash';
+  /**
    * The URL of the widget iframe.
    * @const {string}
    */
-  var IFRAME_URL = 'https://widget.psi.cash/v1/iframe.html';
+  var IFRAME_URL = WIDGET_ORIGIN + '/v1/iframe.html';
 
   /**
    * Prefix added to the everything stored in localStorage (to prevent conflicts with page stuff.)
    * @const {string}
    */
-  var PSICASH_LOCALSTORAGE_KEY_PREFIX = 'PsiCash::';
+  var LOCALSTORAGE_KEY_PREFIX = 'PsiCash::';
+  /**
+   * Key used in the message from the iframe and used to store the next-allowed value in
+   * localStorage (prefixed).
+   * @const {string}
+   */
+  var NEXTALLOWED_KEY = 'nextAllowed';
 
   /**
    * Class that stores info about the available tokens.
@@ -88,6 +99,38 @@
     document.body.appendChild(iframe);
   }
 
+    /**
+   * Check if the reward transaction is allowed for this page yet.
+   * REFACTOR NOTE: Not identical to isRewardAllowed() in iframe.js.
+   * @returns {boolean}
+   */
+  function isRewardAllowed() {
+    if (!window.localStorage) {
+      // Can't check, so just allow.
+      return true;
+    }
+
+    var storageKey = LOCALSTORAGE_KEY_PREFIX + NEXTALLOWED_KEY;
+    var nextAllowedString = localStorage.getItem(storageKey);
+    if (!nextAllowedString) {
+      return true;
+    }
+
+    var nextAllowed = new Date(nextAllowedString);
+    if (!nextAllowed) {
+      return true;
+    }
+
+    var now = new Date();
+
+    var allowedNow = nextAllowed.getTime() < now.getTime();
+    if (!allowedNow) {
+      log('PsiCash: Reward not yet allowed; next allowed = ' + nextAllowed);
+    }
+
+    return allowedNow;
+  }
+
   /**
    * Get the src from the current script's tag. This can be used for retrieving params.
    * @returns {string}
@@ -114,7 +157,7 @@
 
     var localTokens;
     if (window.localStorage) {
-      var tokensKey = PSICASH_LOCALSTORAGE_KEY_PREFIX + URL_TOKENS_PARAM;
+      var tokensKey = LOCALSTORAGE_KEY_PREFIX + URL_TOKENS_PARAM;
       localTokens = localStorage.getItem(tokensKey);
 
       // Side-effect: Store the paramTokens locally, if available.
@@ -174,8 +217,27 @@
     }
   }
 
+  // The iframe script will inform us when the next allowed reward is.
+  window.addEventListener('message', function(event) {
+    // Make sure that only the widget iframe can communicate with us.
+    if (event.origin !== WIDGET_ORIGIN) {
+      return;
+    }
+
+    if (event.data && event.data[NEXTALLOWED_KEY] && window.localStorage) {
+      // Store the next-allowed time so we can check it next time.
+      localStorage.setItem(
+        LOCALSTORAGE_KEY_PREFIX + NEXTALLOWED_KEY,
+        event.data[NEXTALLOWED_KEY]);
+    }
+  }, false);
+
   // Do the work.
   (function() {
+    if (!isRewardAllowed()) {
+      return;
+    }
+
     var distinguisher = getParam(getCurrentScriptURL(), IFRAME_DISTINGUISHER_PARAM);
     // If there's no distinguisher, we can't proceed, as it's necessary for a
     // page-view reward attempt. This case suggests a bug with the page's script tag.

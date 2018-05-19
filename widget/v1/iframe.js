@@ -49,12 +49,13 @@
    * Prefix added to the everything stored in localStorage.
    * @const {string}
    */
-  var PSICASH_LOCALSTORAGE_KEY_PREFIX = 'PsiCash::';
+  var LOCALSTORAGE_KEY_PREFIX = 'PsiCash::';
   /**
-   * Additional localStorage prefix on keys where the next allowed time is for each distinguisher.
+   * Key used to store the next-allowed value in localStorage and pass it back to the
+   * landing page script.
    * @const {string}
    */
-  var NEXTALLOWED_LOCALSTORAGE_KEY_PREFIX = 'NextAllowed::';
+  var NEXTALLOWED_KEY = 'nextAllowed';
 
   /**
    * Get the tokens we should use for the reward transaction.
@@ -70,7 +71,7 @@
     var urlPriority = Number(getParam(location.href, IFRAME_TOKENS_PRIORITY_PARAM) || 0);
 
     var localTokens;
-    var tokensKey = PSICASH_LOCALSTORAGE_KEY_PREFIX + IFRAME_TOKENS_PARAM;
+    var tokensKey = LOCALSTORAGE_KEY_PREFIX + IFRAME_TOKENS_PARAM;
     if (window.localStorage) {
       localTokens = localStorage.getItem(tokensKey);
     }
@@ -149,6 +150,7 @@
 
   /**
    * Check if the reward transaction is allowed for this page yet.
+   * REFACTOR NOTE: Not identical to isRewardAllowed() in iframe.js.
    * @param {string} distinguisher
    * @returns {boolean}
    */
@@ -158,7 +160,7 @@
       return true;
     }
 
-    var storageKey = NEXTALLOWED_LOCALSTORAGE_KEY_PREFIX + distinguisher;
+    var storageKey = LOCALSTORAGE_KEY_PREFIX + NEXTALLOWED_KEY + '::' + distinguisher;
     var nextAllowedString = localStorage.getItem(storageKey);
     if (!nextAllowedString) {
       return true;
@@ -216,8 +218,18 @@
                             response.TransactionResponse.Values &&
                             response.TransactionResponse.Values.NextAllowed;
         if (nextAllowed && window.localStorage) {
-          var storageKey = NEXTALLOWED_LOCALSTORAGE_KEY_PREFIX + distinguisher;
+          var storageKey = LOCALSTORAGE_KEY_PREFIX + NEXTALLOWED_KEY + '::' + distinguisher;
           localStorage.setItem(storageKey, nextAllowed);
+        }
+
+        // Also inform the parent landing page that it can store the NextAllowed time.
+        // This is necessary because Safari doesn't persist localStorage in iframes.
+        if (nextAllowed && window.parent && window.parent.postMessage) {
+          var urlComp = urlComponents(document.referrer);
+          var parentOrigin = urlComp.protocol + '//' + urlComp.host; // Note that urlComp.origin is not widely supported.
+          var msg = {};
+          msg[NEXTALLOWED_KEY] = nextAllowed;
+          window.parent.postMessage(msg, parentOrigin);
         }
       }
 
