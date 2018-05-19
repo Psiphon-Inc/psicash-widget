@@ -20,28 +20,74 @@
 (function () {
   'use strict';
 
-  var TOKENS_PARAM = 'psicash'; // The reason this isn't named "tokens" is to minimize confict with other page params.
-  var DISTINGUISHER_PARAM = 'distinguisher';
-  var IFRAME_URL = 'https://widget.psi.cash/v1/iframe.html';
+  /**
+   * The query or hash param key for tokens passed by the app into the landing page.
+   * The reason the value of this isn't "tokens" is to minimize confict with other page params.
+   * @const {string}
+   */
+  var URL_TOKENS_PARAM = 'psicash';
 
-  // Loads the widget iframe into the page.
-  function loadIframe() {
-    var distinguisher = getParam(getCurrentScriptURL(), DISTINGUISHER_PARAM);
-    // If there's no distinguisher, we can't proceed, as it's necessary for a
-    // page-view reward attempt. This case suggests a bug with the page's script tag.
-    if (!distinguisher) {
-      log('PsiCash: Failed to find distinguisher');
-      return;
-    }
+  /**
+   * The hash param key for passing the tokens to the iframe.
+   * @const {string}
+   */
+  var IFRAME_TOKENS_PARAM = 'tokens';
+  /**
+   * The hash param key for passing the priority of the tokens into the iframe.
+   * The priority will be 0 for low and 1 for high. High priority tokens come from the
+   * landing page URL (which come from the app) and supersede any stored tokens.
+   * See https://github.com/Psiphon-Inc/psiphon-issues/issues/432 for more details.
+   * @const {string}
+   */
+  var IFRAME_TOKENS_PRIORITY_PARAM = 'priority';
+  /**
+   * The hash param key for passing the distinguisher to the iframe.
+   * @const {string}
+   */
+  var IFRAME_DISTINGUISHER_PARAM = 'distinguisher';
+  /**
+   * The widget (and iframe) origin.
+   * @const {string}
+   */
+  var WIDGET_ORIGIN = 'https://widget.psi.cash';
+  /**
+   * The URL of the widget iframe.
+   * @const {string}
+   */
+  var IFRAME_URL = WIDGET_ORIGIN + '/v1/iframe.html';
 
-    var tokens = getParam(location.href, TOKENS_PARAM);
-    // If there are no tokens, we can still load the widget, as it might have
-    // locally-stored tokens that can be used. This situation suggests that the
-    // user is visiting the landing page directly, rather than it being opened by the app.
+  /**
+   * Prefix added to the everything stored in localStorage (to prevent conflicts with page stuff.)
+   * @const {string}
+   */
+  var LOCALSTORAGE_KEY_PREFIX = 'PsiCash::';
+  /**
+   * Key used in the message from the iframe and used to store the next-allowed value in
+   * localStorage (prefixed).
+   * @const {string}
+   */
+  var NEXTALLOWED_KEY = 'nextAllowed';
 
-    var iframeSrc = IFRAME_URL + '#' + DISTINGUISHER_PARAM + '=' + distinguisher;
-    if (tokens) {
-      iframeSrc += '&' + TOKENS_PARAM + '=' + tokens;
+  /**
+   * Class that stores info about the available tokens.
+   * @param {string} tokens
+   * @param {number} priority
+   */
+  function TokensInfo(tokens, priority) {
+    this.tokens = tokens;
+    this.priority = priority;
+  }
+
+  /**
+   * Loads the widget iframe into the page.
+   * @param {?TokensInfo} tokensInfo
+   * @param {string} distinguisher
+   */
+  function loadIframe(tokensInfo, distinguisher) {
+    var iframeSrc = IFRAME_URL + '#' + IFRAME_DISTINGUISHER_PARAM + '=' + distinguisher;
+    if (tokensInfo) {
+      iframeSrc += '&' + IFRAME_TOKENS_PARAM + '=' + tokensInfo.tokens;
+      iframeSrc += '&' + IFRAME_TOKENS_PRIORITY_PARAM + '=' + tokensInfo.priority;
     }
 
     var iframe = document.createElement('iframe');
@@ -53,7 +99,42 @@
     document.body.appendChild(iframe);
   }
 
-  // Get the src from the current script's tag. This can be used for retrieving params.
+    /**
+   * Check if the reward transaction is allowed for this page yet.
+   * REFACTOR NOTE: Not identical to isRewardAllowed() in iframe.js.
+   * @returns {boolean}
+   */
+  function isRewardAllowed() {
+    if (!window.localStorage) {
+      // Can't check, so just allow.
+      return true;
+    }
+
+    var storageKey = LOCALSTORAGE_KEY_PREFIX + NEXTALLOWED_KEY;
+    var nextAllowedString = localStorage.getItem(storageKey);
+    if (!nextAllowedString) {
+      return true;
+    }
+
+    var nextAllowed = new Date(nextAllowedString);
+    if (!nextAllowed) {
+      return true;
+    }
+
+    var now = new Date();
+
+    var allowedNow = nextAllowed.getTime() < now.getTime();
+    if (!allowedNow) {
+      log('PsiCash: Reward not yet allowed; next allowed = ' + nextAllowed);
+    }
+
+    return allowedNow;
+  }
+
+  /**
+   * Get the src from the current script's tag. This can be used for retrieving params.
+   * @returns {string}
+   */
   function getCurrentScriptURL() {
     var thisScript = document.currentScript || document.querySelector('script[src*="psicash.js"]');
 
@@ -63,15 +144,55 @@
     return thisScript.src;
   }
 
-  // Splits the given URL into components that can be accessed with `result.hash`, etc.
+  /**
+   * Get the tokens we should use for the reward transaction.
+   * Return null if no tokens are available.
+   * @returns {?TokensInfo}
+   */
+  function getTokens() {
+    // We'll look in the URL and in localStorage for tokens, but we'll prefer
+    // the former, because it's where tokens will get updated when they change.
+
+    var paramTokens = getParam(location.href, URL_TOKENS_PARAM);
+
+    var localTokens;
+    if (window.localStorage) {
+      var tokensKey = LOCALSTORAGE_KEY_PREFIX + URL_TOKENS_PARAM;
+      localTokens = localStorage.getItem(tokensKey);
+
+      // Side-effect: Store the paramTokens locally, if available.
+      if (paramTokens && paramTokens != localTokens) {
+        localStorage.setItem(tokensKey, paramTokens);
+      }
+    }
+
+    if (paramTokens) {
+      return new TokensInfo(paramTokens, 1);
+    }
+    else if (localTokens) {
+      return new TokensInfo(localTokens, 0);
+    }
+    return null;
+  }
+
+  /**
+   * Splits the given URL into components that can be accessed with `result.hash`, etc.
+   * @param {string} url
+   * @returns {HTMLAnchorElement}
+   */
   function urlComponents(url) {
     var parser = document.createElement('a');
     parser.href = url;
     return parser;
   }
 
-  // Get the param value for the given name from the URL hash or query. Returns null if not found.
-  // TODO: Is it okay to look in both places in all cases?
+  /**
+   * Get the param value for the given name from the URL hash or query.
+   * Returns null if not found.
+   * @param {string} url
+   * @param {string} name
+   * @returns {?string}
+   */
   function getParam(url, name) {
     var urlComp = urlComponents(url);
     var paramLocations = [urlComp.hash.slice(1), urlComp.search.slice(1)];
@@ -96,9 +217,41 @@
     }
   }
 
+  // The iframe script will inform us when the next allowed reward is.
+  window.addEventListener('message', function(event) {
+    // Make sure that only the widget iframe can communicate with us.
+    if (event.origin !== WIDGET_ORIGIN) {
+      return;
+    }
+
+    if (event.data && event.data[NEXTALLOWED_KEY] && window.localStorage) {
+      // Store the next-allowed time so we can check it next time.
+      localStorage.setItem(
+        LOCALSTORAGE_KEY_PREFIX + NEXTALLOWED_KEY,
+        event.data[NEXTALLOWED_KEY]);
+    }
+  }, false);
+
   // Do the work.
   (function() {
-    loadIframe();
+    if (!isRewardAllowed()) {
+      return;
+    }
+
+    var distinguisher = getParam(getCurrentScriptURL(), IFRAME_DISTINGUISHER_PARAM);
+    // If there's no distinguisher, we can't proceed, as it's necessary for a
+    // page-view reward attempt. This case suggests a bug with the page's script tag.
+    if (!distinguisher) {
+      log('PsiCash: Failed to find distinguisher');
+      return;
+    }
+
+    var tokensInfo = getTokens();
+    // If there are no tokens, we can still load the widget, as it might have
+    // locally-stored tokens that can be used. This situation suggests that the
+    // user is visiting the landing page directly, rather than it being opened by the app.
+
+    loadIframe(tokensInfo, distinguisher);
   })();
 
 })();

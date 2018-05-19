@@ -20,43 +20,99 @@
 (function () {
   'use strict';
 
-  var TOKENS_PARAM = 'psicash';
-  var DISTINGUISHER_PARAM = 'distinguisher';
+  /**
+   * The hash param key for passing the tokens to the iframe.
+   * @const {string}
+   */
+  var IFRAME_TOKENS_PARAM = 'tokens';
+  /**
+   * The hash param key for passing the priority of the tokens into the iframe.
+   * The priority will be 0 for low and 1 for high. High priority tokens come from the
+   * landing page URL (which come from the app) and supersede any stored tokens.
+   * See https://github.com/Psiphon-Inc/psiphon-issues/issues/432 for more details.
+   * @const {string}
+   */
+  var IFRAME_TOKENS_PRIORITY_PARAM = 'priority';
+  /**
+   * The hash param key for passing the distinguisher to the iframe.
+   * @const {string}
+   */
+  var IFRAME_DISTINGUISHER_PARAM = 'distinguisher';
 
-  var PSICASH_SERVER_SCHEME = 'https';
-  var PSICASH_SERVER_HOSTNAME = 'api.psi.cash';
-  var PSICASH_API_VERSION = 'v1';
+  /**
+   * The NewTransaction API server endpoint, including version number.
+   * @const {string}
+   */
+  var PSICASH_TRANSACTION_URL = 'https://api.psi.cash/v1/transaction';
 
-  var NEXTALLOWED_LOCALSTORAGE_KEY_PREFIX = 'NextAllowed::';
+  /**
+   * Prefix added to the everything stored in localStorage.
+   * @const {string}
+   */
+  var LOCALSTORAGE_KEY_PREFIX = 'PsiCash::';
+  /**
+   * Key used to store the next-allowed value in localStorage and pass it back to the
+   * landing page script.
+   * @const {string}
+   */
+  var NEXTALLOWED_KEY = 'nextAllowed';
 
   /**
    * Get the tokens we should use for the reward transaction.
+   * Returns null if no tokens are available.
+   * REFACTOR NOTE: This is not identical to getTokens() in psicash.js.
+   * @returns {?string}
    */
-  function getTokens() {
-    var paramTokens = getParam(location.href, TOKENS_PARAM);
+  function getIframeTokens() {
+    // We'll look in the URL and in localStorage for tokens. Which we use will depend on
+    // the priority of the URL tokens.
+
+    var urlTokens = getParam(location.href, IFRAME_TOKENS_PARAM);
+    var urlPriority = Number(getParam(location.href, IFRAME_TOKENS_PRIORITY_PARAM) || 0);
 
     var localTokens;
+    var tokensKey = LOCALSTORAGE_KEY_PREFIX + IFRAME_TOKENS_PARAM;
     if (window.localStorage) {
-      localTokens = localStorage.getItem(TOKENS_PARAM);
-
-      // Side-effect: Store the paramTokens locally, if available.
-      if (paramTokens) {
-        localStorage.setItem(TOKENS_PARAM, paramTokens);
-      }
+      localTokens = localStorage.getItem(tokensKey);
     }
 
-    return paramTokens || localTokens;
+    var tokensToUse = null;
+
+    if (urlTokens && urlPriority > 0) {
+      tokensToUse = urlTokens;
+    }
+    else if (localTokens) {
+      tokensToUse = localTokens;
+    }
+    else if (urlTokens) {
+      tokensToUse = urlTokens;
+    }
+
+    // Side-effect: Store the paramTokens locally, if available.
+    if (tokensToUse && tokensToUse != localTokens && window.localStorage) {
+      localStorage.setItem(tokensKey, tokensToUse);
+    }
+
+    return tokensToUse;
   }
 
-  // Splits the given URL into components that can be accessed with `result.hash`, etc.
+  /**
+   * Splits the given URL into components that can be accessed with `result.hash`, etc.
+   * @param {string} url
+   * @returns {HTMLAnchorElement}
+   */
   function urlComponents(url) {
     var parser = document.createElement('a');
     parser.href = url;
     return parser;
   }
 
-  // Get the param value for the given name from the URL hash or query. Returns null if not found.
-  // TODO: Is it okay to look in both places in all cases?
+  /**
+   * Get the param value for the given name from the URL hash or query. Returns null if not found.
+   * @param {string} url
+   * @param {string} name
+   * @returns {?string}
+   */
   function getParam(url, name) {
     var urlComp = urlComponents(url);
 
@@ -81,21 +137,30 @@
     }
   }
 
-  // Checks if the given distinguisher is valid for the referring page.
+  /**
+   * Checks if the given distinguisher is valid for the referring page.
+   * @param {string} distinguisher
+   * @returns {boolean}
+   */
   function validateDistinguisher(distinguisher) {
     // Distinguishers don't use scheme, so strip it off.
     var parent = new RegExp('https?://(.+)').exec(document.referrer)[1];
     return parent.indexOf(distinguisher) === 0;
   }
 
-  // Check if the reward transaction is allowed for this page yet.
+  /**
+   * Check if the reward transaction is allowed for this page yet.
+   * REFACTOR NOTE: Not identical to isRewardAllowed() in iframe.js.
+   * @param {string} distinguisher
+   * @returns {boolean}
+   */
   function isRewardAllowed(distinguisher) {
     if (!window.localStorage) {
       // Can't check, so just allow.
       return true;
     }
 
-    var storageKey = NEXTALLOWED_LOCALSTORAGE_KEY_PREFIX + distinguisher;
+    var storageKey = LOCALSTORAGE_KEY_PREFIX + NEXTALLOWED_KEY + '::' + distinguisher;
     var nextAllowedString = localStorage.getItem(storageKey);
     if (!nextAllowedString) {
       return true;
@@ -119,10 +184,13 @@
   // Global retry counter
   var requestRetryCount = 0;
 
-  // Make a page-view reward request for the current distinguisher.
+  /**
+   * Make a page-view reward request for the current distinguisher.
+   * @param {string} tokens
+   * @param {string} distinguisher
+   */
   function makePageViewRewardRequest(tokens, distinguisher) {
-    var reqURL = PSICASH_SERVER_SCHEME + '://' + PSICASH_SERVER_HOSTNAME +
-      '/' + PSICASH_API_VERSION + '/transaction';
+    var reqURL = PSICASH_TRANSACTION_URL;
     reqURL += '?class=page-view&distinguisher=' + distinguisher;
 
     var xhr = new(window.XMLHttpRequest || window.ActiveXObject)('MSXML2.XMLHTTP.3.0');
@@ -150,8 +218,18 @@
                             response.TransactionResponse.Values &&
                             response.TransactionResponse.Values.NextAllowed;
         if (nextAllowed && window.localStorage) {
-          var storageKey = NEXTALLOWED_LOCALSTORAGE_KEY_PREFIX + distinguisher;
+          var storageKey = LOCALSTORAGE_KEY_PREFIX + NEXTALLOWED_KEY + '::' + distinguisher;
           localStorage.setItem(storageKey, nextAllowed);
+        }
+
+        // Also inform the parent landing page that it can store the NextAllowed time.
+        // This is necessary because Safari doesn't persist localStorage in iframes.
+        if (nextAllowed && window.parent && window.parent.postMessage) {
+          var urlComp = urlComponents(document.referrer);
+          var parentOrigin = urlComp.protocol + '//' + urlComp.host; // Note that urlComp.origin is not widely supported.
+          var msg = {};
+          msg[NEXTALLOWED_KEY] = nextAllowed;
+          window.parent.postMessage(msg, parentOrigin);
         }
       }
 
@@ -169,14 +247,14 @@
 
   // Do the work.
   (function () {
-    var tokens = getTokens();
+    var tokens = getIframeTokens();
     if (!tokens) {
       // Can't continue with the earning request.
       log('PsiCash: No tokens found.');
       return;
     }
 
-    var distinguisher = getParam(location.href, DISTINGUISHER_PARAM);
+    var distinguisher = getParam(location.href, IFRAME_DISTINGUISHER_PARAM);
     if (!distinguisher) {
       // Can't continue with the earning request.
       log('PsiCash: No distinguisher found.');
