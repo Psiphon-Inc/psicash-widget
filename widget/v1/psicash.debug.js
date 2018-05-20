@@ -85,10 +85,10 @@
    * @param {string} distinguisher
    */
   function loadIframe(tokensInfo, distinguisher) {
-    var iframeSrc = IFRAME_URL + '#' + IFRAME_DISTINGUISHER_PARAM + '=' + distinguisher;
+    var iframeSrc = IFRAME_URL + '#' + IFRAME_DISTINGUISHER_PARAM + '=' + encodeURIComponent(distinguisher);
     if (tokensInfo) {
-      iframeSrc += '&' + IFRAME_TOKENS_PARAM + '=' + tokensInfo.tokens;
-      iframeSrc += '&' + IFRAME_TOKENS_PRIORITY_PARAM + '=' + tokensInfo.priority;
+      iframeSrc += '&' + IFRAME_TOKENS_PARAM + '=' + encodeURIComponent(tokensInfo.tokens);
+      iframeSrc += '&' + IFRAME_TOKENS_PRIORITY_PARAM + '=' + encodeURIComponent(String(tokensInfo.priority));
     }
 
     var iframe = document.createElement('iframe');
@@ -101,18 +101,19 @@
     document.body.appendChild(iframe);
   }
 
-    /**
+  /**
    * Check if the reward transaction is allowed for this page yet.
    * REFACTOR NOTE: Not identical to isRewardAllowed() in iframe.js.
+   * @param {string} distinguisher
    * @returns {boolean}
    */
-  function isRewardAllowed() {
+  function isRewardAllowed(distinguisher) {
     if (!window.localStorage) {
       // Can't check, so just allow.
       return true;
     }
 
-    var storageKey = LOCALSTORAGE_KEY_PREFIX + NEXTALLOWED_KEY;
+    var storageKey = LOCALSTORAGE_KEY_PREFIX + NEXTALLOWED_KEY + '::' + distinguisher;
     var nextAllowedString = localStorage.getItem(storageKey);
     if (!nextAllowedString) {
       return true;
@@ -131,6 +132,21 @@
     }
 
     return allowedNow;
+  }
+
+  /**
+   * Does necessary processing on a message received from the iframe.
+   * (I.e., store the next-allowed reward time.)
+   * @param {string} distinguisher
+   * @param {object} eventData
+   */
+  function processIframeMessage(distinguisher, eventData) {
+    if (eventData && eventData[NEXTALLOWED_KEY] && window.localStorage) {
+      // Store the next-allowed time so we can check it next time.
+      localStorage.setItem(
+        LOCALSTORAGE_KEY_PREFIX + NEXTALLOWED_KEY + '::' + distinguisher,
+        eventData[NEXTALLOWED_KEY]);
+    }
   }
 
   /**
@@ -206,7 +222,7 @@
     for (var i = 0; i < paramLocations.length; i++) {
       match = re.exec(paramLocations[i]);
       if (match) {
-        return match[1];
+        return decodeURIComponent(match[1]);
       }
     }
 
@@ -219,32 +235,17 @@
     }
   }
 
-  // The iframe script will inform us when the next allowed reward is.
-  window.addEventListener('message', function(event) {
-    // Make sure that only the widget iframe can communicate with us.
-    if (event.origin !== WIDGET_ORIGIN) {
-      return;
-    }
-
-    if (event.data && event.data[NEXTALLOWED_KEY] && window.localStorage) {
-      // Store the next-allowed time so we can check it next time.
-      localStorage.setItem(
-        LOCALSTORAGE_KEY_PREFIX + NEXTALLOWED_KEY,
-        event.data[NEXTALLOWED_KEY]);
-    }
-  }, false);
-
   // Do the work.
   (function() {
-    if (!isRewardAllowed()) {
-      return;
-    }
-
     var distinguisher = getParam(getCurrentScriptURL(), IFRAME_DISTINGUISHER_PARAM);
     // If there's no distinguisher, we can't proceed, as it's necessary for a
     // page-view reward attempt. This case suggests a bug with the page's script tag.
     if (!distinguisher) {
       log('PsiCash: Failed to find distinguisher');
+      return;
+    }
+
+    if (!isRewardAllowed(distinguisher)) {
       return;
     }
 
@@ -254,6 +255,16 @@
     // user is visiting the landing page directly, rather than it being opened by the app.
 
     loadIframe(tokensInfo, distinguisher);
+
+    // The iframe script will inform us when the next allowed reward is.
+    window.addEventListener('message', function(event) {
+      // Make sure that only the widget iframe can communicate with us.
+      if (event.origin !== WIDGET_ORIGIN) {
+        return;
+      }
+
+      processIframeMessage(distinguisher, event.data);
+    }, false);
   })();
 
 })();
