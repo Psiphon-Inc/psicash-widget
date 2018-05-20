@@ -124,7 +124,7 @@
     for (var i = 0; i < paramLocations.length; i++) {
       var match = re.exec(paramLocations[i]);
       if (match) {
-        return match[1];
+        return decodeURIComponent(match[1]);
       }
     }
 
@@ -150,7 +150,6 @@
 
   /**
    * Check if the reward transaction is allowed for this page yet.
-   * REFACTOR NOTE: Not identical to isRewardAllowed() in iframe.js.
    * @param {string} distinguisher
    * @returns {boolean}
    */
