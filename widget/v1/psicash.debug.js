@@ -28,6 +28,13 @@
   var URL_TOKENS_PARAM = 'psicash';
 
   /**
+   * The query or hash param key used in the widget script tag to pass in an explicit
+   * distinguisher (vs implicitly using the hostname).
+   * @const {string}
+   */
+  var WIDGET_DISTINGUISHER_PARAM = 'distinguisher';
+
+  /**
    * The hash param key for passing the tokens to the iframe.
    * @const {string}
    */
@@ -237,12 +244,12 @@
 
   // Do the work.
   (function() {
-    var distinguisher = getParam(getCurrentScriptURL(), IFRAME_DISTINGUISHER_PARAM);
-    // If there's no distinguisher, we can't proceed, as it's necessary for a
-    // page-view reward attempt. This case suggests a bug with the page's script tag.
+    var distinguisher = getParam(getCurrentScriptURL(), WIDGET_DISTINGUISHER_PARAM);
     if (!distinguisher) {
-      log('PsiCash: Failed to find distinguisher');
-      return;
+      // If there's no explicit distinguisher in the script tag, then we'll use the
+      // current hostname as the distinguisher. This will work fine for sites that don't
+      // use per-page rewards.
+      distinguisher = urlComponents(location.href).host;
     }
 
     if (!isRewardAllowed(distinguisher)) {
