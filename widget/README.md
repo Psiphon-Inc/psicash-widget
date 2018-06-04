@@ -54,12 +54,17 @@ In either case, it may be appended to pre-existing params with `...&psicash=<tok
 The landing page includes a script tag for `psicash.js`. It provides the distinguisher as a query param. Like so:
 
 ```html
-<script async defer
+<script async defer data-cfasync="false"
   src="https://widget.psi.cash/v1/psicash.js?distinguisher=psip.me">
 </script>
 ```
 
-**TODO**: Should this be a hash param instead? I suspect that we might like to log the distinguisher during requests, and potentially serve different code depending on distinguisher.
+Both `async` and `defer` are included [because](https://html.spec.whatwg.org/multipage/scripting.html):
+> The `defer` attribute may be specified even if the `async` attribute is specified, to cause legacy Web browsers that only support `defer` (and not `async`) to fall back to the `defer` behavior instead of the blocking behavior that is the default.
+
+`data-cfasync="false"` is used to [disable](https://support.cloudflare.com/hc/en-us/articles/200169436--How-can-I-have-Rocket-Loader-ignore-my-script-s-in-Automatic-Mode-) Cloudflare's use of Rocket Loader on the script. We have observed the script failing to be loaded by Rocket Loader, which is [apparently not uncommon](https://support.cloudflare.com/hc/en-us/articles/200169456-Why-is-JavaScript-or-jQuery-not-working-on-my-site-).
+
+**TODO**: Should the distinguisher be a hash param instead? I suspect that we might like to log the distinguisher during requests, and potentially serve different code depending on distinguisher.
 
 ### PsiCash script loads widget
 
