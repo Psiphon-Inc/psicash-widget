@@ -21,29 +21,17 @@
   'use strict';
 
   /**
-   * The hash param key for passing the tokens to the iframe.
+   * The hash param key for passing the tokens, metadata, etc. to the iframe.
    * @const {string}
    */
-  var IFRAME_TOKENS_PARAM = 'tokens';
-  /**
-   * The hash param key for passing the priority of the tokens into the iframe.
-   * The priority will be 0 for low and 1 for high. High priority tokens come from the
-   * landing page URL (which come from the app) and supersede any stored tokens.
-   * See https://github.com/Psiphon-Inc/psiphon-issues/issues/432 for more details.
-   * @const {string}
-   */
-  var IFRAME_TOKENS_PRIORITY_PARAM = 'priority';
-  /**
-   * The hash param key for passing the distinguisher to the iframe.
-   * @const {string}
-   */
-  var IFRAME_DISTINGUISHER_PARAM = 'distinguisher';
+  var IFRAME_PSICASH_PARAM = 'psicash';
 
   /**
    * The NewTransaction API server endpoint, including version number.
    * @const {string}
    */
-  var PSICASH_TRANSACTION_URL = 'https://api.psi.cash/v1/transaction';
+  var PSICASH_TRANSACTION_URL = 'https://api.psi.cash/v1/transaction'; // PROD
+  //var PSICASH_TRANSACTION_URL = 'https://dev-api.psi.cash/v1/transaction'; // DEV
 
   /**
    * Prefix added to the everything stored in localStorage.
@@ -58,42 +46,85 @@
   var NEXTALLOWED_KEY = 'nextAllowed';
 
   /**
-   * Get the tokens we should use for the reward transaction.
-   * Returns null if no tokens are available.
-   * REFACTOR NOTE: This is not identical to getTokens() in psicash.js.
-   * @returns {?string}
+   * @typedef {Object} ReqParams
+   * REFACTOR NOTE: This is identical to ReqParams in psicash.js.
+   * @property {string} tokens
+   * @property {number} tokensPriority Will be 0 for low and 1 for high. High priority
+   *   tokens come from the landing page URL (which come from the app) and supersede any
+   *   stored tokens.
+   *   See https://github.com/Psiphon-Inc/psiphon-issues/issues/432 for more details.
+   * @property {string} distinguisher
+   * @property {Object} metadata
    */
-  function getIframeTokens() {
-    // We'll look in the URL and in localStorage for tokens. Which we use will depend on
-    // the priority of the URL tokens.
 
-    var urlTokens = getParam(location.href, IFRAME_TOKENS_PARAM);
-    var urlPriority = Number(getParam(location.href, IFRAME_TOKENS_PRIORITY_PARAM) || 0);
+  /**
+   * Get the tokens, metadata, etc. we should use for the reward transaction.
+   * NOTE: Not all ReqParams may be filled in.
+   * Returns null if no tokens are available.
+   * REFACTOR NOTE: This is not identical to getReqParams() in psicash.js.
+   * @returns {?ReqParams}
+   */
+  function getIframeReqParams() {
+    // The widget passes ReqParams via URL, and we might have stored some from a previous
+    // request. Which tokens we use will depend on the priority of the URL tokens. Other
+    // fields will be merged.
 
-    var localTokens;
-    var tokensKey = LOCALSTORAGE_KEY_PREFIX + IFRAME_TOKENS_PARAM;
+    /** @type ReqParams */
+    var urlReqParams, localReqParams, finalReqParams;
+
+    var urlPayload = getURLParam(location.href, IFRAME_PSICASH_PARAM);
+    if (!urlPayload) {
+      // We cannot proceed.
+      log('PsiCash: No req params URL param.');
+      return null;
+    }
+
+    urlReqParams = JSON.parse(urlPayload);
+
+    // At least distinguisher _must_ be set.
+    if (!urlReqParams.distinguisher) {
+      log('PsiCash: URL req params distinguisher missing.');
+      return null;
+    }
+
+    var localPayload;
+    var localPayloadKey = LOCALSTORAGE_KEY_PREFIX + IFRAME_PSICASH_PARAM;
     if (window.localStorage) {
-      localTokens = localStorage.getItem(tokensKey);
+      localPayload = localStorage.getItem(localPayloadKey);
     }
 
-    var tokensToUse = null;
-
-    if (urlTokens && urlPriority > 0) {
-      tokensToUse = urlTokens;
-    }
-    else if (localTokens) {
-      tokensToUse = localTokens;
-    }
-    else if (urlTokens) {
-      tokensToUse = urlTokens;
+    if (localPayload) {
+      try {
+        localReqParams = JSON.parse(localPayload);
+      }
+      catch {}
     }
 
-    // Side-effect: Store the paramTokens locally, if available.
-    if (tokensToUse && tokensToUse != localTokens && window.localStorage) {
-      localStorage.setItem(tokensKey, tokensToUse);
+    // We prefer the contents of urlReqParams over localReqParams, but some fields might
+    // be overridden.
+    finalReqParams = urlReqParams;
+
+    // If the URL tokenPriority is 0, then we should use the local tokens, if available.
+    if (!finalReqParams.tokensPriority // tests for undefined, null, and 0
+        && localReqParams && localReqParams.tokens) {
+      finalReqParams.tokens = localReqParams.tokens;
     }
 
-    return tokensToUse;
+    // Ensure tokens are present at this point.
+    if (!finalReqParams.tokens) {
+      log('PsiCash: no tokens in req params.');
+      return null;
+    }
+
+    // Side-effect: Store the finalReqParams locally.
+    if (window.localStorage) {
+      // Note that this also persists the distinguisher, even though it won't be used in
+      // any following request. We could clear the field (or use a new structure), but
+      // it's not worth it.
+      localStorage.setItem(localPayloadKey, JSON.stringify(finalReqParams));
+    }
+
+    return finalReqParams;
   }
 
   /**
@@ -113,7 +144,7 @@
    * @param {string} name
    * @returns {?string}
    */
-  function getParam(url, name) {
+  function getURLParam(url, name) {
     var urlComp = urlComponents(url);
 
     var paramLocations = [urlComp.hash.slice(1), urlComp.search.slice(1)];
@@ -139,7 +170,7 @@
 
   /**
    * Checks if the given distinguisher is valid for the referring page.
-   * @param {string} distinguisher
+   * @param {!string} distinguisher
    * @returns {boolean}
    */
   function validateDistinguisher(distinguisher) {
@@ -150,7 +181,7 @@
 
   /**
    * Check if the reward transaction is allowed for this page yet.
-   * @param {string} distinguisher
+   * @param {!string} distinguisher
    * @returns {boolean}
    */
   function isRewardAllowed(distinguisher) {
@@ -185,30 +216,38 @@
 
   /**
    * Make a page-view reward request for the current distinguisher.
-   * @param {string} tokens
-   * @param {string} distinguisher
+   * @param {!ReqParams} reqParams
    */
-  function makePageViewRewardRequest(tokens, distinguisher) {
+  function makePageViewRewardRequest(reqParams) {
+    // We need the request metadata to exist to record the attempt count.
+    if (!reqParams.metadata) {
+      reqParams.metadata = {};
+    }
+
+    // Increment the attempt count.
+    reqParams.metadata.attempt = reqParams.metadata.attempt ? reqParams.metadata.attempt+1 : 1;
+
     var reqURL = PSICASH_TRANSACTION_URL;
-    reqURL += '?class=page-view&distinguisher=' + distinguisher;
+    reqURL += '?class=page-view&distinguisher=' + encodeURIComponent(reqParams.distinguisher);
 
     var xhr = new(window.XMLHttpRequest || window.ActiveXObject)('MSXML2.XMLHTTP.3.0');
     xhr.open('POST', reqURL, true);
     xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-    xhr.setRequestHeader('X-PsiCash-Auth', tokens);
+    xhr.setRequestHeader('X-PsiCash-Auth', reqParams.tokens);
+    xhr.setRequestHeader('X-PsiCash-Metadata', JSON.stringify(reqParams.metadata));
 
     requestRetryCount += 1;
     var delay = Math.min(1 * 60 * 60 * 1000, Math.pow(3, requestRetryCount) * 1000);
 
     xhr.onload = function() {
-      if (xhr.status === 500) {
+      if (xhr.status >= 500) {
         // Retry with capped back-off
         log('PsiCash: request failed with 500; retrying in ' + delay + 'ms');
-        setTimeout(function () { makePageViewRewardRequest(tokens, distinguisher); }, delay);
+        setTimeout(function () { makePageViewRewardRequest(reqParams); }, delay);
       }
 
       if (xhr.status === 200) {
-        log('PsiCash: Success');
+        log('PsiCash: Successful page view reward for ' + reqParams.distinguisher);
 
         // Store the NextAllowed datetime in the response to limit our future attempts.
         var response = JSON.parse(xhr.responseText);
@@ -217,7 +256,7 @@
                             response.TransactionResponse.Values &&
                             response.TransactionResponse.Values.NextAllowed;
         if (nextAllowed && window.localStorage) {
-          var storageKey = LOCALSTORAGE_KEY_PREFIX + NEXTALLOWED_KEY + '::' + distinguisher;
+          var storageKey = LOCALSTORAGE_KEY_PREFIX + NEXTALLOWED_KEY + '::' + reqParams.distinguisher;
           localStorage.setItem(storageKey, nextAllowed);
         }
 
@@ -238,7 +277,7 @@
     xhr.onerror = function () {
       // Retry with capped back-off
       log('PsiCash: request error; retrying in ' + delay + 'ms');
-      setTimeout(function () { makePageViewRewardRequest(tokens, distinguisher); }, delay);
+      setTimeout(function () { makePageViewRewardRequest(reqParams); }, delay);
     };
 
     xhr.send(null);
@@ -246,33 +285,25 @@
 
   // Do the work.
   (function () {
-    var tokens = getIframeTokens();
-    if (!tokens) {
+    var reqParams = getIframeReqParams();
+    if (!reqParams) {
       // Can't continue with the earning request.
-      log('PsiCash: No tokens found.');
       return;
     }
 
-    var distinguisher = getParam(location.href, IFRAME_DISTINGUISHER_PARAM);
-    if (!distinguisher) {
+    if (!validateDistinguisher(reqParams.distinguisher)) {
       // Can't continue with the earning request.
-      log('PsiCash: No distinguisher found.');
+      log('PsiCash: Distinguisher invalid for landing page: ' + reqParams.distinguisher);
       return;
     }
 
-    if (!validateDistinguisher(distinguisher)) {
-      // Can't continue with the earning request.
-      log('PsiCash: Distinguisher invalid for landing page: ' + distinguisher);
-      return;
-    }
-
-    if (!isRewardAllowed(distinguisher)) {
+    if (!isRewardAllowed(reqParams.distinguisher)) {
       // The check will log details.
       return;
     }
 
     // We're okay to make the request.
-    makePageViewRewardRequest(tokens, distinguisher);
+    makePageViewRewardRequest(reqParams);
   })();
 
 })();

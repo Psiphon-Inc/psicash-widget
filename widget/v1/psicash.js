@@ -21,11 +21,11 @@
   'use strict';
 
   /**
-   * The query or hash param key for tokens passed by the app into the landing page.
-   * The reason the value of this isn't "tokens" is to minimize confict with other page params.
+   * The query or hash param key for tokens, metadata, etc. passed by the app into the
+   * landing page.
    * @const {string}
    */
-  var URL_TOKENS_PARAM = 'psicash';
+  var URL_PSICASH_PARAM = 'psicash';
 
   /**
    * The query or hash param key used in the widget script tag to pass in an explicit
@@ -35,28 +35,16 @@
   var WIDGET_DISTINGUISHER_PARAM = 'distinguisher';
 
   /**
-   * The hash param key for passing the tokens to the iframe.
+   * The hash param key for passing the tokens, metadata, etc. to the iframe.
    * @const {string}
    */
-  var IFRAME_TOKENS_PARAM = 'tokens';
-  /**
-   * The hash param key for passing the priority of the tokens into the iframe.
-   * The priority will be 0 for low and 1 for high. High priority tokens come from the
-   * landing page URL (which come from the app) and supersede any stored tokens.
-   * See https://github.com/Psiphon-Inc/psiphon-issues/issues/432 for more details.
-   * @const {string}
-   */
-  var IFRAME_TOKENS_PRIORITY_PARAM = 'priority';
-  /**
-   * The hash param key for passing the distinguisher to the iframe.
-   * @const {string}
-   */
-  var IFRAME_DISTINGUISHER_PARAM = 'distinguisher';
+  var IFRAME_PSICASH_PARAM = 'psicash';
   /**
    * The widget (and iframe) origin.
    * @const {string}
    */
-  var WIDGET_ORIGIN = 'https://widget.psi.cash';
+  var WIDGET_ORIGIN = 'https://widget.psi.cash'; // PROD
+  //var WIDGET_ORIGIN = 'https://dev-widget.psi.cash'; // DEV
   /**
    * The URL of the widget iframe.
    * @const {string}
@@ -76,26 +64,12 @@
   var NEXTALLOWED_KEY = 'nextAllowed';
 
   /**
-   * Class that stores info about the available tokens.
-   * @param {string} tokens
-   * @param {number} priority
-   */
-  function TokensInfo(tokens, priority) {
-    this.tokens = tokens;
-    this.priority = priority;
-  }
-
-  /**
    * Loads the widget iframe into the page.
-   * @param {?TokensInfo} tokensInfo
-   * @param {string} distinguisher
+   * @param {!ReqParams} reqParams
    */
-  function loadIframe(tokensInfo, distinguisher) {
-    var iframeSrc = IFRAME_URL + '#' + IFRAME_DISTINGUISHER_PARAM + '=' + encodeURIComponent(distinguisher);
-    if (tokensInfo) {
-      iframeSrc += '&' + IFRAME_TOKENS_PARAM + '=' + encodeURIComponent(tokensInfo.tokens);
-      iframeSrc += '&' + IFRAME_TOKENS_PRIORITY_PARAM + '=' + encodeURIComponent(String(tokensInfo.priority));
-    }
+  function loadIframe(reqParams) {
+    var reqParamsString = encodeURIComponent(JSON.stringify(reqParams));
+    var iframeSrc = IFRAME_URL + '#' + IFRAME_PSICASH_PARAM + '=' + reqParamsString;
 
     var iframe = document.createElement('iframe');
     iframe.src = iframeSrc;
@@ -167,34 +141,87 @@
   }
 
   /**
-   * Get the tokens we should use for the reward transaction.
-   * Return null if no tokens are available.
-   * @returns {?TokensInfo}
+   * @typedef {Object} ReqParams
+   * REFACTOR NOTE: This is identical to ReqParams in psicash.js.
+   * @property {string} tokens
+   * @property {number} tokensPriority Will be 0 for low and 1 for high. High priority
+   *   tokens come from the landing page URL (which come from the app) and supersede any
+   *   stored tokens.
+   *   See https://github.com/Psiphon-Inc/psiphon-issues/issues/432 for more details.
+   * @property {string} distinguisher
+   * @property {Object} metadata
    */
-  function getTokens() {
-    // We'll look in the URL and in localStorage for tokens, but we'll prefer
-    // the former, because it's where tokens will get updated when they change.
 
-    var paramTokens = getParam(location.href, URL_TOKENS_PARAM);
+  /**
+   * Get the tokens, metadata, etc. we should use for the reward transaction.
+   * NOTE: Not all ReqParams may be filled in. For example, if there are no req params, we
+   * can still load the widget, as it might have locally-stored tokens that can be used.
+   * This situation suggests that the user is visiting the landing page directly, rather
+   * than it being opened by the app.
+   * @param {!string} distinguisher
+   * @returns {!ReqParams}
+   */
+  function getReqParams(distinguisher) {
+    // We'll look in the URL and in localStorage for the payload, but we'll prefer
+    // the URL, because it's where tokens will get updated when they change.
+    // They params payload is transferred as URL-encoded JSON.
 
-    var localTokens;
+    var urlPayload = getURLParam(location.href, URL_PSICASH_PARAM);
+
+    /** @type {string} */
+    var localPayload;
     if (window.localStorage) {
-      var tokensKey = LOCALSTORAGE_KEY_PREFIX + URL_TOKENS_PARAM;
-      localTokens = localStorage.getItem(tokensKey);
+      var localPayloadKey = LOCALSTORAGE_KEY_PREFIX + URL_PSICASH_PARAM;
+      localPayload = localStorage.getItem(localPayloadKey);
 
-      // Side-effect: Store the paramTokens locally, if available.
-      if (paramTokens && paramTokens != localTokens) {
-        localStorage.setItem(tokensKey, paramTokens);
+      // Side-effect: Store the urlPayload locally, if available.
+      // We're not going to parse first, and just store the JSON string.
+      if (urlPayload && urlPayload != localPayload) {
+        localStorage.setItem(localPayloadKey, urlPayload);
       }
     }
 
-    if (paramTokens) {
-      return new TokensInfo(paramTokens, 1);
+    var jsonPayload = urlPayload ? urlPayload : localPayload;
+    var tokensPriority = urlPayload ? 1 : 0;
+
+    return makeReqParams(jsonPayload, tokensPriority, distinguisher);
+  }
+
+  /**
+   * Creates (or hydrates) ReqInfo object.
+   * @param {?string} jsonPayload
+   * @param {!number} tokensPriority
+   * @param {!string} distinguisher
+   * @returns {!ReqParams}
+   */
+  function makeReqParams(jsonPayload, tokensPriority, distinguisher) {
+    /** type ReqParams */
+    var reqParams;
+
+    if (jsonPayload) {
+      try {
+        reqParams = JSON.parse(jsonPayload);
+      }
+      catch {
+        // Old-style payload, with just the tokens. We'll construct a partial object.
+        reqParams = {
+          tokens: jsonPayload,
+          metadata: null
+        };
+      }
     }
-    else if (localTokens) {
-      return new TokensInfo(localTokens, 0);
+    else {
+      // We can proceed with no payload, as the iframe might have stored the tokens.
+      reqParams = {
+        tokens: null,
+        metadata: null
+      };
     }
-    return null;
+
+    reqParams.tokensPriority = tokensPriority;
+    reqParams.distinguisher = distinguisher;
+
+    return reqParams;
   }
 
   /**
@@ -215,7 +242,7 @@
    * @param {string} name
    * @returns {?string}
    */
-  function getParam(url, name) {
+  function getURLParam(url, name) {
     var urlComp = urlComponents(url);
     var paramLocations = [urlComp.hash.slice(1), urlComp.search.slice(1)];
 
@@ -241,7 +268,7 @@
 
   // Do the work.
   (function() {
-    var distinguisher = getParam(getCurrentScriptURL(), WIDGET_DISTINGUISHER_PARAM);
+    var distinguisher = getURLParam(getCurrentScriptURL(), WIDGET_DISTINGUISHER_PARAM);
     if (!distinguisher) {
       // If there's no explicit distinguisher in the script tag, then we'll use the
       // current hostname as the distinguisher. This will work fine for sites that don't
@@ -253,12 +280,9 @@
       return;
     }
 
-    var tokensInfo = getTokens();
-    // If there are no tokens, we can still load the widget, as it might have
-    // locally-stored tokens that can be used. This situation suggests that the
-    // user is visiting the landing page directly, rather than it being opened by the app.
+    var reqParams = getReqParams(distinguisher);
 
-    loadIframe(tokensInfo, distinguisher);
+    loadIframe(reqParams);
 
     // The iframe script will inform us when the next allowed reward is.
     window.addEventListener('message', function(event) {
