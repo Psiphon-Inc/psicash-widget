@@ -49,7 +49,7 @@
    * The URL of the widget iframe.
    * @const {string}
    */
-  var IFRAME_URL = WIDGET_ORIGIN + '/v1/iframe.html';
+  var IFRAME_URL = WIDGET_ORIGIN + '/v1/iframe.a1.html';
 
   /**
    * Prefix added to the everything stored in localStorage (to prevent conflicts with page stuff.)
