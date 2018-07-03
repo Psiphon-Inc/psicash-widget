@@ -50,7 +50,7 @@
    * @const {string}
    */
   //var IFRAME_URL = WIDGET_ORIGIN + '/v1/iframe.html';
-  var IFRAME_URL = WIDGET_ORIGIN + '/v1/iframe.debug.html'; // DEBUG
+  var IFRAME_URL = WIDGET_ORIGIN + '/v1/iframe.debug.a1.html'; // DEBUG
 
   /**
    * Prefix added to the everything stored in localStorage (to prevent conflicts with page stuff.)
