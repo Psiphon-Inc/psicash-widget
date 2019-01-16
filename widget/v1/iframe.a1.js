@@ -97,7 +97,7 @@
       try {
         localReqParams = JSON.parse(localPayload);
       }
-      catch {}
+      catch (error) {}
     }
 
     // We prefer the contents of urlReqParams over localReqParams, but some fields might

@@ -204,7 +204,7 @@
       try {
         reqParams = JSON.parse(jsonPayload);
       }
-      catch {
+      catch (error) {
         // Old-style payload, with just the tokens. We'll construct a partial object.
         reqParams = {
           tokens: jsonPayload,
