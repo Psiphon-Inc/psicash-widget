@@ -44,19 +44,19 @@
    * @const {string}
    */
   var WIDGET_ORIGIN = 'https://widget.psi.cash'; // PROD
-  //var WIDGET_ORIGIN = 'https://dev-widget.psi.cash'; // DEV
+  //DEV WIDGET_ORIGIN = 'https://dev-widget.psi.cash'; // DEV
   /**
    * The URL of the widget iframe.
    * @const {string}
    */
-  //var IFRAME_URL = WIDGET_ORIGIN + '/v1/iframe.html';
-  var IFRAME_URL = WIDGET_ORIGIN + '/v1/iframe.debug.a1.html'; // DEBUG
+  var IFRAME_URL = WIDGET_ORIGIN + '/v1/iframe.{build_id}.html';
 
   /**
    * Prefix added to the everything stored in localStorage (to prevent conflicts with page stuff.)
    * @const {string}
    */
-  var LOCALSTORAGE_KEY_PREFIX = 'PsiCash::';
+  var LOCALSTORAGE_KEY_PREFIX = 'PsiCash::'; // PROD
+  //DEV LOCALSTORAGE_KEY_PREFIX = 'PsiCash-Dev::'; // DEV
   /**
    * Key used in the message from the iframe and used to store the next-allowed value in
    * localStorage (prefixed).
@@ -76,8 +76,7 @@
     iframe.src = iframeSrc;
 
     // Make invisible.
-    //iframe.style.cssText = 'width:0;height:0;border:0;border:none;position:absolute;';
-    iframe.style.cssText = 'width:400px;height:400px;'; // DEBUG
+    iframe.style.cssText = 'width:0;height:0;border:0;border:none;position:absolute;';
 
     document.body.appendChild(iframe);
   }
@@ -134,7 +133,7 @@
    * @returns {string}
    */
   function getCurrentScriptURL() {
-    var thisScript = document.currentScript || document.querySelector('script[src*="psicash.js"]');
+    var thisScript = document.currentScript || document.querySelector('script[src*="psicash.js"]') || document.querySelector('script[src*="psicash.debug.js"]');
 
     // Give TS error: "Property 'src' does not exist on type 'HTMLScriptElement | SVGScriptElement'."
     // But we know it's the former (which has a src) and not the latter.
@@ -275,7 +274,7 @@
       // If there's no explicit distinguisher in the script tag, then we'll use the
       // current hostname as the distinguisher. This will work fine for sites that don't
       // use per-page rewards.
-      distinguisher = urlComponents(location.href).host;
+      distinguisher = urlComponents(location.href).hostname;
     }
 
     if (!isRewardAllowed(distinguisher)) {
