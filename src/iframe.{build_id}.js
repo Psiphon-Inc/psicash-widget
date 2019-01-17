@@ -31,13 +31,14 @@
    * @const {string}
    */
   var PSICASH_TRANSACTION_URL = 'https://api.psi.cash/v1/transaction'; // PROD
-  //var PSICASH_TRANSACTION_URL = 'https://dev-api.psi.cash/v1/transaction'; // DEV
+  //DEV PSICASH_TRANSACTION_URL = 'https://dev-api.psi.cash/v1/transaction'; // DEV
 
   /**
    * Prefix added to the everything stored in localStorage.
    * @const {string}
    */
-  var LOCALSTORAGE_KEY_PREFIX = 'PsiCash::';
+  var LOCALSTORAGE_KEY_PREFIX = 'PsiCash::'; // PROD
+  //DEV LOCALSTORAGE_KEY_PREFIX = 'PsiCash-Dev::'; // DEV
   /**
    * Key used to store the next-allowed value in localStorage and pass it back to the
    * landing page script.
@@ -97,7 +98,7 @@
       try {
         localReqParams = JSON.parse(localPayload);
       }
-      catch {}
+      catch (error) {}
     }
 
     // We prefer the contents of urlReqParams over localReqParams, but some fields might
@@ -264,7 +265,7 @@
         // This is necessary because Safari doesn't persist localStorage in iframes.
         if (nextAllowed && window.parent && window.parent.postMessage) {
           var urlComp = urlComponents(document.referrer);
-          var parentOrigin = urlComp.protocol + '//' + urlComp.host; // Note that urlComp.origin is not widely supported.
+          var parentOrigin = urlComp.protocol + '//' + urlComp.hostname; // Note that urlComp.origin is not widely supported and in IE urlComp.host includes the port.
           var msg = {};
           msg[NEXTALLOWED_KEY] = nextAllowed;
           window.parent.postMessage(msg, parentOrigin);
