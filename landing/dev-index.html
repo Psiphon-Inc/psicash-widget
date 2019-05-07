@@ -1,10 +1,25 @@
 <!doctype html>
-<html lang="">
+<html lang="en">
   <head>
     <meta charset="utf-8">
+    <!-- prevent the favicon request -->
+    <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
 
     <script async defer data-cfasync="false"
-    src="https://dev-widget.psi.cash/v1/psicash.debug.js">
+            src="https://widget.psi.cash/v2/psicash.js?debug=1&dev=1">
+    </script>
+    <script>
+      function psicash() {
+        psicash.queue = psicash.queue || [];
+        psicash.queue.push(arguments);
+      }
+
+      psicash('page-view');
+
+      // Use a timeout to simulate a later click-through event
+      setTimeout(function clickThroughEvent() {
+        psicash('click-through', function() { console.log('click-through callback fired'); });
+      }, 2000);
     </script>
   </head>
   <body>
