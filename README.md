@@ -6,30 +6,39 @@
   - Enable the CSP meta tag in `iframe.html` and generate the `default-src` part as well.
 * Create a file server. Have it listen to different ports for landing page and widget files. Maybe in conjunction with the generator.
 
-## Testing
+## Setup
 
-Two separate static file servers are needed to emulate separate origins for the landing page, the widget server, and the API server.
+Probably check this out when installing Gulp: https://gulpjs.com/docs/en/getting-started/quick-start
 
-Run two file servers in the `client/widget` directory. Like:
-
-```no-highlight
-# In one terminal:
-$ python -m SimpleHTTPServer 54321
-# In another terminal:
-$ python -m SimpleHTTPServer 12345
+```
+$ npm install --global gulp-cli
+$ npm install
 ```
 
-In order for the transaction to succeed, there will need to be a `transaction_type` record with a distinguisher of `localhost` or `localhost:54321` or `localhost:54321/landing`, etc.
+## Building and Testing
 
-You will need to modify `landing.html` to refer to `psicash.js` at `localhost:12345` or whatever port you used for the second file server. Also modify the `distinguisher=` param to match the localhost server and distinguisher.
+Build:
+```
+$ gulp build
+```
+The result will be in `./dist`.
 
-Also modify `IFRAME_URL` in `psicash.js` to use `localhost:12345`.
+Test locally:
+```
+$ gulp serve
+```
 
-You will also have to modify the API server config to indicate the localhost origin for the widget requests. In `config_override.toml`, in the `[cors]` section, add a setting like `widget_origin = "http://localhost:12345"`. Restart the server.
+Deploy to S3 (with [credentials set up](https://docs.aws.amazon.com/sdk-for-javascript/v2/developer-guide/configuring-the-jssdk.html)):
+```
+$ gulp build && gulp deploy
+```
+...and then do a CloudFront invalidation by hand (TODO: consider doing it [automatically](https://www.npmjs.com/package/gulp-cloudfront-invalidate-aws-publish)).
 
-You can then access the landing page, which embeds the widget, at:
-`http://localhost:54321/landing.html#psicash=<tokens>`
+The output will indicate two separate static file servers are needed to emulate separate origins for the landing page and the widget. Then visit `http://localhost:33333/dev-index.html#psicash={"tokens":<tokens>}`.
 
+In order for the transactions to succeed, there will need to be a `transaction_type` record with a distinguisher of `localhost` or `localhost:33333`.
+
+You will also have to modify the API server config to indicate the localhost origin for the widget requests. In `config_override.toml`, in the `[cors]` section, add a setting like `widget_origins = ["http://localhost:44444"]`. Restart the server.
 
 ## How it works
 
@@ -38,24 +47,45 @@ You can then access the landing page, which embeds the widget, at:
 The app will open the landing page, passing the earner token to it via a hash param:
 
 ```no-highlight
-https://psip.me/#psicash=<tokens>
+https://psip.me/#psicash=<payload>
 ```
 
 If the landing page is already using a hash/anchor, then the tokens may be passed via a query param:
 
 ```no-highlight
-https://psip.me/?psicash=<tokens>
+https://psip.me/?psicash=<payload>
 ```
 
 In either case, it may be appended to pre-existing params with `...&psicash=<tokens>`.
 
-### Landing page embeds PsiCash script
-
-The landing page includes a script tag for `psicash.js`. It provides the distinguisher as a query param. Like so:
+### Embedding the PsiCash widget
 
 ```html
 <script async defer data-cfasync="false"
-  src="https://widget.psi.cash/v1/psicash.js?distinguisher=psip.me">
+  src="https://widget.psi.cash/v2/psicash.js">
+</script>
+<script>
+  function psicash() {
+    psicash.queue = psicash.queue || [];
+    psicash.queue.push(arguments);
+  }
+
+  // This need not be provided to the calls below if it's the same as the page domain
+  var distinguisher = 'mylandingpage.com';
+
+  // If you want a page-view reward:
+  psicash('page-view', {distinguisher});
+  // If you don't need to use an explicit distinguisher, use this form:
+  //psicash('page-view');
+
+  // If you want a click-through reward:
+  document.querySelector('#mylink').addEventListener('click', function(event) {
+    // Supress default navigation, so we don't leave the page before the reward completes
+    event.preventDefault();
+    psicash('click-through', {distinguisher}, function() {
+      // Callback fired, reward complete, continue navigation
+    });
+  });
 </script>
 ```
 
@@ -64,7 +94,16 @@ Both `async` and `defer` are included [because](https://html.spec.whatwg.org/mul
 
 `data-cfasync="false"` is used to [disable](https://support.cloudflare.com/hc/en-us/articles/200169436--How-can-I-have-Rocket-Loader-ignore-my-script-s-in-Automatic-Mode-) Cloudflare's use of Rocket Loader on the script. We have observed the script failing to be loaded by Rocket Loader, which is [apparently not uncommon](https://support.cloudflare.com/hc/en-us/articles/200169456-Why-is-JavaScript-or-jQuery-not-working-on-my-site-).
 
-**TODO**: Should the distinguisher be a hash param instead? I suspect that we might like to log the distinguisher during requests, and potentially serve different code depending on distinguisher.
+`psicash()` must be passed an action type, but the other two parameters are optional (if, for example, the distinguisher can be derived from the domain name and no callback is desired):
+
+```js
+psicash('desired-action-name');
+psicash('desired-action-name', callback);
+psicash('desired-action-name', {distinguisher});
+psicash('desired-action-name', {distinguisher}, callback);
+```
+
+Note that, at this time, the callback for an action takes no parameters and will not indicate success or failure.
 
 ### PsiCash script loads widget
 
@@ -72,35 +111,8 @@ Both `async` and `defer` are included [because](https://html.spec.whatwg.org/mul
 
 ```html
 <iframe
-  src="https://widget.psi.cash/v1/iframe.html#psicash=<token>&distinguisher=psip.me">
+  src="https://widget.psi.cash/v2/iframe.html#psicash=<payload>">
 </iframe>
 ```
 
-### Iframe loads widget script
-
-Iframe loads `widget.psi.cash/v1/iframe.js`. No special params are necessary as they are accessible from the iframe's `window.location`.
-
-The iframe script loads tokens out of local storage, if they exist. We'll call those the stored-tokens.
-
-The passed-tokens are retrieved from the URL param.
-
-> For now we'll always be replacing the stored-tokens with the passed-tokens. When we have accounts, we'll compare the tokens and, if they're different, attempt to merge them. (Merging a Tracker into an Account is possible. Merging a Tracker into a Tracker is not possible.)
-
-**NOTE**: Storing tokens may be problematic in Safari, as it has tight 3rd party iframe cookie/storage restrictions.
-https://medium.com/@bluepnume/safaris-new-tracking-rules-and-enabling-cross-domain-data-storage-85241eea7483
-https://stackoverflow.com/questions/18852767/is-there-any-workaround-to-set-third-party-cookie-in-iframe-for-safari
-https://stackoverflow.com/questions/38584273/local-storage-cross-domain-safari-disables-it-by-default
-https://webkit.org/blog/7675/intelligent-tracking-prevention/
-
-The distinguisher is retrieved from the URL param.
-
-The iframe script verifies that the distinguisher is valid for the landing page. At this time the distinguisher must be a prefix match of the page URL, starting from the hostname (so not including scheme). This could be made more flexible, for example to allow for the presence or absence of `www.` at the start.
-
-Iframe makes a page view reward request to:
-
-```
-https://api.psi.cash/v1/transaction?class=page-view&distinguisher=psip.me"
-    X-PsiCash-Auth:<token>
-```
-
-On a 500 error, the request will be retried (with back-off).
+The code in that iframe performs the requested transactions with the PsiCash server.
