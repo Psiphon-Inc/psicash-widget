@@ -26,6 +26,11 @@ import * as common from './common.js';
 const PSICASH_TRANSACTION_URL = 'https://api.psi.cash/v1/transaction'; // PROD
 const PSICASH_TRANSACTION_URL_DEV = 'https://dev-api.psi.cash/v1/transaction'; // DEV
 
+/**
+ * The maximum number of attempts allowed for a single request.
+ * (To be extra clear: 3 means 1 try and 2 retries.)
+ * @const {number}
+ */
 const MAX_REQUEST_ATTEMPTS = 3;
 
 /**
@@ -42,6 +47,7 @@ const NEXTALLOWED_KEY = 'nextAllowed';
 let psicashParams_;
 
 /**
+ * The origin of the hosting page. Needed for message passing.
  * @type {string}
  */
 let pageOrigin_;
@@ -122,6 +128,10 @@ function getIframePsiCashParams() {
   return finalPsiCashParams;
 }
 
+/**
+ * Process a posted message received from the widget page code.
+ * @param {string} eventData
+ */
 function processPageMessage(eventData) {
   const msg = common.Message.fromJSON(eventData);
 
@@ -152,7 +162,7 @@ function processPageMessage(eventData) {
 }
 
 /**
- *
+ * Send a message to the widget page code.
  * @param {common.Message} msg
  */
 function sendMessageToPage(msg) {

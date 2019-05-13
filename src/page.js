@@ -233,7 +233,11 @@ function psicash(action, obj, callback) {
  */
 psicash.Action = common.PsiCashAction;
 
-// Must be called after the iframe indicates that it's available.
+/**
+ * Replace the stub psicash() function that the page snippet added with the real function.
+ * Also begin processing queued actions.
+ * Must be called after the iframe indicates that it's available.
+ */
 function setUpPsiCashTag() {
   if (!window.psicash) {
     common.error('Improperly configured; window.psicash must be present; see usage instructions');
