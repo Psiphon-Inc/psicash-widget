@@ -27,6 +27,10 @@ export const PSICASH_URL_PARAM = 'psicash';
 export const DEBUG_URL_PARAM = 'debug';
 export const DEV_URL_PARAM = 'dev';
 
+/**
+ * PsiCashParams captures the intial configuration state of the widget. It is shared
+ * between the page and iframe.
+ */
 export class PsiCashParams {
   constructor(tokens, tokensPriority, metadata, widgetOrigin, pageURL, dev, debug) {
     /** @type {string} */
@@ -74,6 +78,9 @@ export class PsiCashParams {
   }
 }
 
+/**
+ * Defines the structure of messages passed/posted between the page and iframe scripts.
+ */
 export class Message {
   constructor(type, payload, storage) {
     /** @type {string} */
@@ -86,6 +93,11 @@ export class Message {
     this.storage = storage;
   }
 
+  /**
+   * Create a Message object from the object in a JSON string.
+   * @param {string} jsonString
+   * @returns {?Message} Returns null if jsonString is null or empty.
+   */
   static fromJSON(jsonString) {
     if (!jsonString) {
       return null;
@@ -105,8 +117,18 @@ export class Message {
 const LOCALSTORAGE_KEY_PREFIX = 'PsiCash::v2::';
 const LOCALSTORAGE_KEY_PREFIX_DEV = 'PsiCash-Dev::v2::';
 
+/**
+ * Storage key for getting/settings PsiCashParams.
+ * @const {string}
+ */
 export const PARAMS_STORAGE_KEY = 'PsiCashParams';
 
+/**
+ * Construct a localStorage key based on the given suffix.
+ * @param {string} keySuffix The unique part of the key. Will be appended to the prefix.
+ * @param {any} dev Truthy value indicating if the widget is currently talking to a dev server.
+ * @returns {string}
+ */
 function localStorageKey(keySuffix, dev) {
   const keyPrefix = dev ? LOCALSTORAGE_KEY_PREFIX_DEV : LOCALSTORAGE_KEY_PREFIX;
   if (keySuffix.indexOf(keyPrefix) !== 0) {
