@@ -1,11 +1,5 @@
 # PsiCash Widget
 
-## TODO
-
-* Create a generator. Have it take the widget origin, API server hostname, etc., and produce the minified files.
-  - Enable the CSP meta tag in `iframe.html` and generate the `default-src` part as well.
-* Create a file server. Have it listen to different ports for landing page and widget files. Maybe in conjunction with the generator.
-
 ## Setup
 
 Probably check this out when installing Gulp: https://gulpjs.com/docs/en/getting-started/quick-start
