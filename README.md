@@ -68,15 +68,15 @@ In either case, it may be appended to pre-existing params with `...&psicash=<tok
   var distinguisher = 'mylandingpage.com';
 
   // If you want a page-view reward:
-  psicash('page-view', {distinguisher});
-  // If you don't need to use an explicit distinguisher, use this form:
-  //psicash('page-view');
+  psicash('page-view');
+  // If you need to provide an explicit distinguisher, use this form:
+  // psicash('page-view', {distinguisher});
 
   // If you want a click-through reward:
   document.querySelector('#mylink').addEventListener('click', function(event) {
     // Supress default navigation, so we don't leave the page before the reward completes
     event.preventDefault();
-    psicash('click-through', {distinguisher}, function() {
+    psicash('click-through', function() {
       // Callback fired, reward complete, continue navigation
     });
   });
