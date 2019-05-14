@@ -264,7 +264,16 @@ export function getOrigin(urlComp) {
  */
 export function getURLParam(url, name) {
   const urlComp = urlComponents(url);
-  const paramLocations = [urlComp.hash.slice(1), urlComp.search.slice(1)];
+
+  // urlComp.search is like "?psicash=etc"
+  const qp = urlComp.search.slice(1);
+  // urlComp.hash is like "#psicash=etc" or "#!psicash=etc"
+  let hash = urlComp.hash.slice(1);
+  if (hash.slice(0, 1) === '!') {
+    hash = hash.slice(1);
+  }
+
+  const paramLocations = [hash, qp];
 
   const reString = '(?:^|&)' + name + '=(.+?)(?:&|$)';
   const re = new RegExp(reString);

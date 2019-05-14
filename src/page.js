@@ -126,7 +126,7 @@ function getPsiCashParams() {
 function loadIframe() {
   const iframeURLPath = psicashParams_.debug ? IFRAME_URL_PATH_DEBUG : IFRAME_URL_PATH;
   const paramsString = encodeURIComponent(JSON.stringify(psicashParams_));
-  let iframeSrc = `${psicashParams_.widgetOrigin}${iframeURLPath}#`;
+  let iframeSrc = `${psicashParams_.widgetOrigin}${iframeURLPath}#!`;
   iframeSrc += `${common.PSICASH_URL_PARAM}=${paramsString}`;
   if (psicashParams_.dev !== null && psicashParams_.dev !== undefined) {
     iframeSrc += `&dev=${psicashParams_.dev}`;
