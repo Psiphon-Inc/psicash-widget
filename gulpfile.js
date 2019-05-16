@@ -134,7 +134,7 @@ function s3Upload() {
 
   // define custom headers
   var headers = {
-    'Cache-Control': 'max-age=315360000, no-transform, public'
+    'Cache-Control': 'must-revalidate, public'
   };
 
   return gulp
