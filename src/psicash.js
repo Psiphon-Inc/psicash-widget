@@ -169,6 +169,16 @@
 
     var urlPayload = getURLParam(location.href, URL_PSICASH_PARAM);
 
+    // Check if the payload is base64-encoded
+    try {
+      if (urlPayload) {
+        urlPayload = window.atob(urlPayload);
+      }
+    }
+    catch (error) {
+      // Do nothing -- not base64
+    }
+
     /** @type {string} */
     var localPayload;
     if (window.localStorage) {
@@ -245,7 +255,16 @@
    */
   function getURLParam(url, name) {
     var urlComp = urlComponents(url);
-    var paramLocations = [urlComp.hash.slice(1), urlComp.search.slice(1)];
+
+    // urlComp.search is like "?psicash=etc"
+    var qp = urlComp.search.slice(1);
+    // urlComp.hash is like "#psicash=etc" or "#!psicash=etc"
+    var hash = urlComp.hash.slice(1);
+    if (hash.slice(0, 1) === '!') {
+      hash = hash.slice(1);
+    }
+
+    var paramLocations = [hash, qp];
 
     var reString = '(?:^|&)' + name + '=(.+?)(?:&|$)';
     var re = new RegExp(reString);
