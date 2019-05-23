@@ -32,7 +32,7 @@ export const DEV_URL_PARAM = 'dev';
  * between the page and iframe.
  */
 export class PsiCashParams {
-  constructor(tokens, tokensPriority, metadata, widgetOrigin, pageURL, dev, debug) {
+  constructor(tokens, tokensPriority, metadata, widgetOrigin, pageURL, dev, debug, error) {
     /** @type {string} */
     this.tokens = tokens;
     /**
@@ -53,6 +53,12 @@ export class PsiCashParams {
     this.dev = dev;
     /** @type {any} */
     this.debug = debug;
+
+    /**
+     * If truthy, then we are in an irrecoverable error state.
+     * @type {string}
+     * */
+    this.error = error;
   }
 
   /**
@@ -64,8 +70,8 @@ export class PsiCashParams {
       return null;
     }
 
-    let {tokens, tokensPriority, metadata, widgetOrigin, pageURL, dev, debug} = obj;
-    return new PsiCashParams(tokens, tokensPriority, metadata, widgetOrigin, pageURL, dev, debug);
+    let {tokens, tokensPriority, metadata, widgetOrigin, pageURL, dev, debug, error} = obj;
+    return new PsiCashParams(tokens, tokensPriority, metadata, widgetOrigin, pageURL, dev, debug, error);
   }
 
   /**
@@ -82,7 +88,7 @@ export class PsiCashParams {
  * Defines the structure of messages passed/posted between the page and iframe scripts.
  */
 export class Message {
-  constructor(type, payload, storage) {
+  constructor(type, payload, storage, error, success=true) {
     /** @type {string} */
     this.id = String(Math.random());
     /** @type {string} */
@@ -91,6 +97,18 @@ export class Message {
     this.payload = payload;
     /** @type {Object} */
     this.storage = storage;
+
+    /**
+     * If this is set, an unrecoverable error has occurred.
+     * @type {string}
+     * */
+    this.error = error;
+
+    /**
+     * Valid only in the iframe->page direction. Indicates if a requested action was successful.
+     * @type {boolean}
+     */
+    this.success = success;
   }
 
   /**
@@ -103,7 +121,7 @@ export class Message {
       return null;
     }
     let j = JSON.parse(jsonString);
-    let m = new Message(j.type, j.payload, j.storage);
+    let m = new Message(j.type, j.payload, j.storage, j.error, j.success);
     // The JSON will have its own id
     m.id = j.id;
     return m;
@@ -197,7 +215,7 @@ export function storageMerge(obj, preferObj, dev) {
 
 /**
  * Logs arguments to console.
- * Just a wrapper for console.log to prevent trying to use it if it doesn't exist.
+ * Just a wrapper for console.log to prevenst trying to use it if it doesn't exist.
  */
 export function log() {
   let argsArray = Array.prototype.slice.call(arguments);
@@ -208,14 +226,16 @@ export function log() {
 }
 
 /**
- * Logs a message and throws an exception.
- * All arguments are used in the message.
+ * Logs an error to console.
+ * Just a wrapper for console.error to prevents trying to use it if it doesn't exist.
  */
 export function error() {
   let argsArray = Array.prototype.slice.call(arguments);
-  argsArray.unshift('Error:');
-  log.apply(null, argsArray);
-  throw new Error(argsArray.join(' '));
+  argsArray.unshift('PsiCash:');
+  if (window.console) {
+    let logger = window.console.error || window.console.log;
+    logger.apply(null, argsArray);
+  }
 }
 
 /**

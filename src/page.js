@@ -99,17 +99,16 @@ function getPsiCashParams() {
   }
 
   // Prefer the payload from the URL.
-  finalPsiCashParams = urlPsiCashParams || localPsiCashParams || null;
-  if (finalPsiCashParams) {
-    finalPsiCashParams.widgetOrigin = common.getOrigin(scriptURLComponents);
-    finalPsiCashParams.pageURL = location.href;
+  finalPsiCashParams = urlPsiCashParams || localPsiCashParams || new common.PsiCashParams();
 
-    if (urlDebug !== null) {
-      finalPsiCashParams.debug = urlDebug;
-    }
-    if (urlDev !== null) {
-      finalPsiCashParams.dev = urlDev;
-    }
+  finalPsiCashParams.widgetOrigin = common.getOrigin(scriptURLComponents);
+  finalPsiCashParams.pageURL = location.href;
+
+  if (urlDebug !== null) {
+    finalPsiCashParams.debug = urlDebug;
+  }
+  if (urlDev !== null) {
+    finalPsiCashParams.dev = urlDev;
   }
 
   // Side-effect: Store the params locally, if available and different.
@@ -150,8 +149,16 @@ function loadIframe() {
 }
 
 /**
+ * Callback for adding two numbers.
+ *
+ * @callback ActionCallback
+ * @param {string} error
+ * @param {boolean} success
+ */
+
+/**
  * Callbacks waiting for PsiCash operations being processed by the iframe.
- * @type {Object.<string, function>}
+ * @type {Object.<string, ActionCallback>}
  */
 let pendingMessageCallbacks = {};
 
@@ -163,6 +170,10 @@ function processIframeMessage(eventData) {
   const msg = JSON.parse(eventData);
 
   common.log('iframe message:', msg.type, msg);
+
+  if (msg.error) {
+    common.error(msg.error);
+  }
 
   // NOTE: Don't return early from these cases unless you're certain there can't
   // be an associated callback.
@@ -182,7 +193,7 @@ function processIframeMessage(eventData) {
   }
 
   if (msg.id && pendingMessageCallbacks[msg.id]) {
-    pendingMessageCallbacks[msg.id]();
+    pendingMessageCallbacks[msg.id](msg.error, msg.success);
     delete pendingMessageCallbacks[msg.id];
   }
 }
@@ -191,7 +202,7 @@ function processIframeMessage(eventData) {
  * Send a message to the iframe.
  * @param {!string} type The message type
  * @param {?any} payload
- * @param {?function} callback
+ * @param {?ActionCallback} callback
  */
 function sendMessageToIframe(type, payload, callback) {
   if (!iframeElement_ || !iframeElement_.contentWindow || !iframeElement_.contentWindow.postMessage) {
@@ -211,11 +222,44 @@ function sendMessageToIframe(type, payload, callback) {
 }
 
 /**
+ * Clear localStorage for page and/or iframe. Used when testing.
+ * @param {boolean} page Clear page localStorage.
+ * @param {boolean} iframe Clear iframe localStorage
+ * @param {?ActionCallback} callback Callback to fire when clearing is complete.
+ */
+function clearLocalStorage(page, iframe, callback) {
+  if (page) {
+    window.localStorage.clear();
+  }
+
+  if (iframe) {
+    sendMessageToIframe('clear-localStorage', null, callback);
+  }
+  else {
+    setTimeout(callback, 1);
+  }
+}
+exposeDebugFunction(clearLocalStorage, 'clearLocalStorage');
+
+/**
+ * Expose a function to the page, on `window._psicash`.
+ * @param {function} func
+ * @param {string} funcName
+ */
+function exposeDebugFunction(func, funcName) {
+  if (!window.Cypress) {
+    return;
+  }
+  window._psicash = window._psicash || {};
+  window._psicash[funcName] = func;
+}
+
+/**
  * The exposed PsiCash action function. Full description of use can be found in the README.
  * @public
  * @param {!psicash.Action} action The action to perform. Required.
  * @param {?Object} obj Optional.
- * @param {?function} callback Optional.
+ * @param {?ActionCallback} callback Optional.
  */
 function psicash(action, obj, callback) {
   if (typeof obj === 'function') {
@@ -246,6 +290,11 @@ function setUpPsiCashTag() {
 
   const initialQueue = (window.psicash && window.psicash.queue) || [];
 
+  // If the page hasn't included an 'init' action, we'll prepend one.
+  if (initialQueue.length === 0 || initialQueue[0][0] !== 'init') {
+    initialQueue.unshift(['init']);
+  }
+
   window.psicash = psicash;
   for (let i = 0; i < initialQueue.length; i++) {
     psicash.apply(null, initialQueue[i]);
@@ -260,10 +309,6 @@ function setUpPsiCashTag() {
   }
 
   psicashParams_ = getPsiCashParams();
-  if (!psicashParams_) {
-    // Can't continue.
-    return common.error('Failed to get PsiCashParams');
-  }
 
   // The iframe script will inform us when the next allowed reward is.
   window.addEventListener('message', function pageMessageHandler(event) {

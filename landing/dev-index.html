@@ -1,12 +1,13 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" debug="true">
   <head>
     <meta charset="utf-8">
     <!-- prevent the favicon request -->
     <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
+    <title>DEV: Landing Page with PsiCash</title>
 
     <script async defer data-cfasync="false"
-            src="https://widget.psi.cash/v2/psicash.js?debug=1&dev=1">
+      src="https://widget.psi.cash/v2/psicash.js?dev=1">
     </script>
     <script>
       function psicash() {
@@ -14,15 +15,58 @@
         psicash.queue.push(arguments);
       }
 
-      psicash('page-view');
+      psicash('init', function(err, success) {
+        console.log('init callback fired; err=', err, '; success=', success);
+        document.querySelector('#init-error').textContent = err ? err : '(none)';
+        document.querySelector('#init-success').textContent = success;
+        document.querySelector('#init-done').textContent = 'DONE';
+      });
+
+      psicash('page-view', function(err, success) {
+        console.log('page-view callback fired; err=', err, '; success=', success);
+        document.querySelector('#page-view-error').textContent = err ? err : '(none)';
+        document.querySelector('#page-view-success').textContent = success;
+      });
 
       // Use a timeout to simulate a later click-through event
       setTimeout(function clickThroughEvent() {
-        psicash('click-through', function() { console.log('click-through callback fired'); });
+        psicash('click-through', function(err, success) {
+          console.log('click-through callback fired; err=', err, '; success=', success);
+          document.querySelector('#click-through-error').textContent = err ? err : '(none)';
+          document.querySelector('#click-through-success').textContent = success;
+        });
       }, 2000);
     </script>
   </head>
   <body>
     <h1>DEV: Landing Page with PsiCash</h1>
+
+    <hr>
+    <div>
+      <label>init:</label>
+      <ul>
+        <li>Error: <span id="init-error"></span></li>
+        <li>Success: <span id="init-success"></span></li>
+        <li><span id="init-done"></span></li>
+      </ul>
+    </div>
+
+    <hr>
+    <div>
+      <label>page-view:</label>
+      <ul>
+        <li>Error: <span id="page-view-error"></span></li>
+        <li>Success: <span id="page-view-success"></span></li>
+      </ul>
+    </div>
+
+    <hr>
+    <div>
+      <label>click-through:</label>
+      <ul>
+        <li>Error: <span id="click-through-error"></span></li>
+        <li>Success: <span id="click-through-success"></span></li>
+      </ul>
+    </div>
   </body>
 </html>
