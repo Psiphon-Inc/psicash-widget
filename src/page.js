@@ -99,17 +99,16 @@ function getPsiCashParams() {
   }
 
   // Prefer the payload from the URL.
-  finalPsiCashParams = urlPsiCashParams || localPsiCashParams || null;
-  if (finalPsiCashParams) {
-    finalPsiCashParams.widgetOrigin = common.getOrigin(scriptURLComponents);
-    finalPsiCashParams.pageURL = location.href;
+  finalPsiCashParams = urlPsiCashParams || localPsiCashParams || new common.PsiCashParams();
 
-    if (urlDebug !== null) {
-      finalPsiCashParams.debug = urlDebug;
-    }
-    if (urlDev !== null) {
-      finalPsiCashParams.dev = urlDev;
-    }
+  finalPsiCashParams.widgetOrigin = common.getOrigin(scriptURLComponents);
+  finalPsiCashParams.pageURL = location.href;
+
+  if (urlDebug !== null) {
+    finalPsiCashParams.debug = urlDebug;
+  }
+  if (urlDev !== null) {
+    finalPsiCashParams.dev = urlDev;
   }
 
   // Side-effect: Store the params locally, if available and different.
@@ -150,10 +149,19 @@ function loadIframe() {
 }
 
 /**
- * Callbacks waiting for PsiCash operations being processed by the iframe.
- * @type {Object.<string, function>}
+ * Callback for adding two numbers.
+ *
+ * @callback ActionCallback
+ * @param {string} error
+ * @param {boolean} success
+ * @param {string} detail
  */
-let pendingMessageCallbacks = {};
+
+/**
+ * Callbacks waiting for PsiCash operations being processed by the iframe.
+ * @type {Object.<string, ActionCallback>}
+ */
+let pendingMessageCallbacks_ = {};
 
 /**
  * Does necessary processing on a message received from the iframe.
@@ -163,6 +171,10 @@ function processIframeMessage(eventData) {
   const msg = JSON.parse(eventData);
 
   common.log('iframe message:', msg.type, msg);
+
+  if (msg.error) {
+    common.error(msg.error);
+  }
 
   // NOTE: Don't return early from these cases unless you're certain there can't
   // be an associated callback.
@@ -174,6 +186,9 @@ function processIframeMessage(eventData) {
     // In Safari, iframe's don't have persistent storage, so we'll store stuff for it.
     common.storageSet(IFRAME_STORAGE, msg.data, psicashParams_.dev);
   }
+  else if (msg.type === psicash.Action.Init) {
+    // Indicates that the request completed (successfully or not).
+  }
   else if (msg.type === psicash.Action.PageView) {
     // Indicates that the request completed (successfully or not).
   }
@@ -181,9 +196,9 @@ function processIframeMessage(eventData) {
     // Indicates that the request completed (successfully or not).
   }
 
-  if (msg.id && pendingMessageCallbacks[msg.id]) {
-    pendingMessageCallbacks[msg.id]();
-    delete pendingMessageCallbacks[msg.id];
+  if (msg.id && pendingMessageCallbacks_[msg.id]) {
+    pendingMessageCallbacks_[msg.id](msg.error, msg.success, msg.detail);
+    delete pendingMessageCallbacks_[msg.id];
   }
 }
 
@@ -191,7 +206,8 @@ function processIframeMessage(eventData) {
  * Send a message to the iframe.
  * @param {!string} type The message type
  * @param {?any} payload
- * @param {?function} callback
+ * @param {?ActionCallback} callback
+ * @returns {!common.Message} The message object sent.
  */
 function sendMessageToIframe(type, payload, callback) {
   if (!iframeElement_ || !iframeElement_.contentWindow || !iframeElement_.contentWindow.postMessage) {
@@ -202,12 +218,47 @@ function sendMessageToIframe(type, payload, callback) {
   const msg = new common.Message(type, payload, common.storageGet(IFRAME_STORAGE, psicashParams_.dev));
 
   if (callback) {
-    pendingMessageCallbacks[msg.id] = callback;
+    pendingMessageCallbacks_[msg.id] = callback;
   }
 
   // Older IE has a limitation where only strings can be sent as the message, so we're
   // going to use JSON.
   iframeElement_.contentWindow.postMessage(JSON.stringify(msg), psicashParams_.widgetOrigin);
+
+  return msg;
+}
+
+/**
+ * Clear localStorage for page and/or iframe. Used when testing.
+ * @param {boolean} page Clear page localStorage.
+ * @param {boolean} iframe Clear iframe localStorage
+ * @param {?ActionCallback} callback Callback to fire when clearing is complete.
+ */
+function clearLocalStorage(page, iframe, callback) {
+  if (page) {
+    window.localStorage.clear();
+  }
+
+  if (iframe) {
+    sendMessageToIframe('clear-localStorage', null, callback);
+  }
+  else {
+    setTimeout(callback, 1);
+  }
+}
+exposeDebugFunction(clearLocalStorage, 'clearLocalStorage');
+
+/**
+ * Expose a function to the page, on `window._psicash`.
+ * @param {function} func
+ * @param {string} funcName
+ */
+function exposeDebugFunction(func, funcName) {
+  if (!window.Cypress) {
+    return;
+  }
+  window._psicash = window._psicash || {};
+  window._psicash[funcName] = func;
 }
 
 /**
@@ -215,15 +266,41 @@ function sendMessageToIframe(type, payload, callback) {
  * @public
  * @param {!psicash.Action} action The action to perform. Required.
  * @param {?Object} obj Optional.
- * @param {?function} callback Optional.
+ * @param {?ActionCallback} callback Optional.
  */
 function psicash(action, obj, callback) {
+  if (!common.PsiCashActionValid(action)) {
+    throw new Error('PsiCash action name is invalid: ' + action)
+  }
+
   if (typeof obj === 'function') {
     callback = obj;
     obj = {};
   }
   obj = obj || {};
-  sendMessageToIframe(action, obj, callback);
+
+  if (typeof obj.timeout === 'undefined') {
+    obj.timeout = common.PsiCashActionDefaultTimeout(action);
+  }
+
+  const msg = sendMessageToIframe(action, obj, callback);
+
+  // We want to guarantee that the callback fires within the specified time. Hopefully
+  // that will happen naturally, but we'll use a callback to ensure it.
+  if (obj.timeout) {
+    setTimeout(() => {
+      // This timeout will always fire, even if the action has already completed.
+      // We can determine if the callback should be called if it's still in
+      // pendingMessageCallbacks_.
+      if (msg.id && pendingMessageCallbacks_[msg.id]) {
+        common.log('action timed out: ' + action);
+        // The callback has NOT already been called.
+        pendingMessageCallbacks_[msg.id](null, false, 'timeout');
+        // Delete the callback so it isn't called again.
+        delete pendingMessageCallbacks_[msg.id];
+      }
+    }, obj.timeout);
+  }
 }
 
 /**
@@ -246,6 +323,11 @@ function setUpPsiCashTag() {
 
   const initialQueue = (window.psicash && window.psicash.queue) || [];
 
+  // If the page hasn't included an 'init' action, we'll prepend one.
+  if (initialQueue.length === 0 || initialQueue[0][0] !== 'init') {
+    initialQueue.unshift(['init']);
+  }
+
   window.psicash = psicash;
   for (let i = 0; i < initialQueue.length; i++) {
     psicash.apply(null, initialQueue[i]);
@@ -260,10 +342,6 @@ function setUpPsiCashTag() {
   }
 
   psicashParams_ = getPsiCashParams();
-  if (!psicashParams_) {
-    // Can't continue.
-    return common.error('Failed to get PsiCashParams');
-  }
 
   // The iframe script will inform us when the next allowed reward is.
   window.addEventListener('message', function pageMessageHandler(event) {

@@ -17,9 +17,17 @@ $ gulp build
 ```
 The result will be in `./dist`.
 
-Test locally:
+Serve the test landing page (and widget) locally, and watch for changes:
 ```
 $ gulp serve
+```
+
+Run Cypress tests:
+```
+# In one terminal:
+$ gulp serve
+# In another tab:
+$ npx cypress open
 ```
 
 Deploy to S3 (with [credentials set up](https://docs.aws.amazon.com/sdk-for-javascript/v2/developer-guide/configuring-the-jssdk.html)):
@@ -76,17 +84,13 @@ In either case, it may be appended to pre-existing params with `...&psicash=<tok
   document.querySelector('#mylink').addEventListener('click', function(event) {
     // Supress default navigation, so we don't leave the page before the reward completes
     event.preventDefault();
-    psicash('click-through', function() {
-      // Callback fired, reward complete, continue navigation
+    psicash('click-through', function(error, success) {
+      // Callback fired, reward complete, continue navigation.
+      // Probably ignore error or success, as they don't influence the navigation.
     });
   });
 </script>
 ```
-
-Both `async` and `defer` are included [because](https://html.spec.whatwg.org/multipage/scripting.html):
-> The `defer` attribute may be specified even if the `async` attribute is specified, to cause legacy Web browsers that only support `defer` (and not `async`) to fall back to the `defer` behavior instead of the blocking behavior that is the default.
-
-`data-cfasync="false"` is used to [disable](https://support.cloudflare.com/hc/en-us/articles/200169436--How-can-I-have-Rocket-Loader-ignore-my-script-s-in-Automatic-Mode-) Cloudflare's use of Rocket Loader on the script. We have observed the script failing to be loaded by Rocket Loader, which is [apparently not uncommon](https://support.cloudflare.com/hc/en-us/articles/200169456-Why-is-JavaScript-or-jQuery-not-working-on-my-site-).
 
 `psicash()` must be passed an action type, but the other two parameters are optional (if, for example, the distinguisher can be derived from the domain name and no callback is desired):
 
@@ -97,7 +101,21 @@ psicash('desired-action-name', {distinguisher});
 psicash('desired-action-name', {distinguisher}, callback);
 ```
 
-Note that, at this time, the callback for an action takes no parameters and will not indicate success or failure.
+Possible action types:
+* `'init'`: Can be used to initialize the widget, or check for initialization. Calling this is **optional** (and not recommended), as initialization will happen regardless.
+* `'page-view'`: Trigger a page-view reward for the current page or given distinguisher.
+* `'click-through'`: Trigger a click-through reward for the current page or given distinguisher.
+
+Callbacks are passed `(error, success)`. `error` indicates a hard, probably unrecoverable failure (such as an absence of tokens). `success` indicates that the action was successful; if false it may indicate a soft failure, such as a reward-rate-limiting 429 response. If `error` is non-null, `success` is meaningless.
+
+
+#### `<script>` tag attributes
+
+Both `async` and `defer` are included [because](https://html.spec.whatwg.org/multipage/scripting.html):
+> The `defer` attribute may be specified even if the `async` attribute is specified, to cause legacy Web browsers that only support `defer` (and not `async`) to fall back to the `defer` behavior instead of the blocking behavior that is the default.
+
+`data-cfasync="false"` is used to [disable](https://support.cloudflare.com/hc/en-us/articles/200169436--How-can-I-have-Rocket-Loader-ignore-my-script-s-in-Automatic-Mode-) Cloudflare's use of Rocket Loader on the script. We have observed the script failing to be loaded by Rocket Loader, which is [apparently not uncommon](https://support.cloudflare.com/hc/en-us/articles/200169456-Why-is-JavaScript-or-jQuery-not-working-on-my-site-).
+
 
 ### PsiCash script loads widget
 
