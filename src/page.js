@@ -154,13 +154,14 @@ function loadIframe() {
  * @callback ActionCallback
  * @param {string} error
  * @param {boolean} success
+ * @param {string} detail
  */
 
 /**
  * Callbacks waiting for PsiCash operations being processed by the iframe.
  * @type {Object.<string, ActionCallback>}
  */
-let pendingMessageCallbacks = {};
+let pendingMessageCallbacks_ = {};
 
 /**
  * Does necessary processing on a message received from the iframe.
@@ -185,6 +186,9 @@ function processIframeMessage(eventData) {
     // In Safari, iframe's don't have persistent storage, so we'll store stuff for it.
     common.storageSet(IFRAME_STORAGE, msg.data, psicashParams_.dev);
   }
+  else if (msg.type === psicash.Action.Init) {
+    // Indicates that the request completed (successfully or not).
+  }
   else if (msg.type === psicash.Action.PageView) {
     // Indicates that the request completed (successfully or not).
   }
@@ -192,9 +196,9 @@ function processIframeMessage(eventData) {
     // Indicates that the request completed (successfully or not).
   }
 
-  if (msg.id && pendingMessageCallbacks[msg.id]) {
-    pendingMessageCallbacks[msg.id](msg.error, msg.success);
-    delete pendingMessageCallbacks[msg.id];
+  if (msg.id && pendingMessageCallbacks_[msg.id]) {
+    pendingMessageCallbacks_[msg.id](msg.error, msg.success, msg.detail);
+    delete pendingMessageCallbacks_[msg.id];
   }
 }
 
@@ -203,6 +207,7 @@ function processIframeMessage(eventData) {
  * @param {!string} type The message type
  * @param {?any} payload
  * @param {?ActionCallback} callback
+ * @returns {!common.Message} The message object sent.
  */
 function sendMessageToIframe(type, payload, callback) {
   if (!iframeElement_ || !iframeElement_.contentWindow || !iframeElement_.contentWindow.postMessage) {
@@ -213,12 +218,14 @@ function sendMessageToIframe(type, payload, callback) {
   const msg = new common.Message(type, payload, common.storageGet(IFRAME_STORAGE, psicashParams_.dev));
 
   if (callback) {
-    pendingMessageCallbacks[msg.id] = callback;
+    pendingMessageCallbacks_[msg.id] = callback;
   }
 
   // Older IE has a limitation where only strings can be sent as the message, so we're
   // going to use JSON.
   iframeElement_.contentWindow.postMessage(JSON.stringify(msg), psicashParams_.widgetOrigin);
+
+  return msg;
 }
 
 /**
@@ -262,12 +269,38 @@ function exposeDebugFunction(func, funcName) {
  * @param {?ActionCallback} callback Optional.
  */
 function psicash(action, obj, callback) {
+  if (!common.PsiCashActionValid(action)) {
+    throw new Error('PsiCash action name is invalid: ' + action)
+  }
+
   if (typeof obj === 'function') {
     callback = obj;
     obj = {};
   }
   obj = obj || {};
-  sendMessageToIframe(action, obj, callback);
+
+  if (typeof obj.timeout === 'undefined') {
+    obj.timeout = common.PsiCashActionDefaultTimeout(action);
+  }
+
+  const msg = sendMessageToIframe(action, obj, callback);
+
+  // We want to guarantee that the callback fires within the specified time. Hopefully
+  // that will happen naturally, but we'll use a callback to ensure it.
+  if (obj.timeout) {
+    setTimeout(() => {
+      // This timeout will always fire, even if the action has already completed.
+      // We can determine if the callback should be called if it's still in
+      // pendingMessageCallbacks_.
+      if (msg.id && pendingMessageCallbacks_[msg.id]) {
+        common.log('action timed out: ' + action);
+        // The callback has NOT already been called.
+        pendingMessageCallbacks_[msg.id](null, false, 'timeout');
+        // Delete the callback so it isn't called again.
+        delete pendingMessageCallbacks_[msg.id];
+      }
+    }, obj.timeout);
+  }
 }
 
 /**

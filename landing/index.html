@@ -17,25 +17,28 @@
         psicash.queue.push(arguments);
       }
 
-      psicash('init', function(err, success) {
+      psicash('init', function(err, success, detail) {
         console.log('init callback fired; err=', err, '; success=', success);
         document.querySelector('#init-error').textContent = err ? err : '(none)';
         document.querySelector('#init-success').textContent = success;
+        document.querySelector('#init-detail').textContent = detail;
         document.querySelector('#init-done').textContent = 'DONE';
       });
 
-      psicash('page-view', function(err, success) {
+      psicash('page-view', function(err, success, detail) {
         console.log('page-view callback fired; err=', err, '; success=', success);
         document.querySelector('#page-view-error').textContent = err ? err : '(none)';
         document.querySelector('#page-view-success').textContent = success;
+        document.querySelector('#page-view-detail').textContent = detail;
       });
 
       // Use a timeout to simulate a later click-through event
       setTimeout(function clickThroughEvent() {
-        psicash('click-through', function(err, success) {
+        psicash('click-through', function(err, success, detail) {
           console.log('click-through callback fired; err=', err, '; success=', success);
           document.querySelector('#click-through-error').textContent = err ? err : '(none)';
           document.querySelector('#click-through-success').textContent = success;
+          document.querySelector('#click-through-detail').textContent = detail;
         });
       }, 2000);
     </script>
@@ -49,6 +52,7 @@
       <ul>
         <li>Error: <span id="init-error"></span></li>
         <li>Success: <span id="init-success"></span></li>
+        <li>Detail: <span id="init-detail"></span></li>
         <li><span id="init-done"></span></li>
       </ul>
     </div>
@@ -59,6 +63,7 @@
       <ul>
         <li>Error: <span id="page-view-error"></span></li>
         <li>Success: <span id="page-view-success"></span></li>
+        <li>Detail: <span id="page-view-detail"></span></li>
       </ul>
     </div>
 
@@ -68,6 +73,7 @@
       <ul>
         <li>Error: <span id="click-through-error"></span></li>
         <li>Success: <span id="click-through-success"></span></li>
+        <li>Detail: <span id="click-through-detail"></span></li>
       </ul>
     </div>
   </body>

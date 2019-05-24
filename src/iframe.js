@@ -179,7 +179,7 @@ function processPageMessage(eventData) {
 
   if (!isRewardAllowed(clazz, distinguisher)) {
     // We're not going to set the error, as this is transient and expected
-    msg.success = false;
+    msg.setSuccess(false, 'not yet allowed');
     sendMessageToPage(msg);
     // The check will log the details
     return;
@@ -269,41 +269,57 @@ function getDistinguisher(msg) {
 }
 
 /**
- *
+ * Make a transaction (i.e., reward) request to the PsiCash server.
+ * `msg` will be modified to indicate success.
  * @param {common.Message} msg
- * @param {string} clazz
+ * @param {string} clazz The transaction class (like 'page-view')
+ * @param {string} distinguisher The transaction distinguisher (like 'example.com')
+ * @param {number} timeout The time allowed for this request (including retries).
+ *                         Regardless of how short this is, we'll always make one attempt.
+ * @param {number} start The start time for a series of request retries. Must only be set by recursive calls.
+ * @param {number} attempt The count of the next attempt. Must only be set by recursive calls.
+ * @param {common.PsiCashParams} psicashParams The params object to use and modify. Must only be set by recursive calls.
  */
-function makeTransactionRequest(msg, clazz, distinguisher, attemptCount=1) {
+function makeTransactionRequest(msg, clazz, distinguisher, timeout, start=Date.now(), attempt=1, psicashParams=null) {
   function recurse() {
-    attemptCount += 1;
-    if (attemptCount > MAX_REQUEST_ATTEMPTS) {
-      // We failed all of our attempts. Let the page script know that we're done.
+    if (Date.now() - start > timeout) {
+      // We failed all of our attempts and ran out of time.
+      // Let the page script know that we're done.
       // We're not going to set msg.error, as this might be transient and recoverable.
-      msg.success = false;
+      msg.setSuccess(false, 'request timeout');
       sendMessageToPage(msg);
       return;
     }
-    setTimeout(() => makeTransactionRequest(msg, clazz, distinguisher, attemptCount), 1000);
+
+    // Wait 100ms and try again.
+    setTimeout(() => makeTransactionRequest(msg, clazz, distinguisher, timeout, start, attempt+1), 100);
+  }
+
+  if (!psicashParams) {
+    // Clone the global object, which we don't want to modify directly because it might be
+    // used by multiple concurrent requests.
+    psicashParams = JSON.parse(JSON.stringify(psicashParams_));
   }
 
   // We need the request metadata to exist to record the attempt count.
-  if (!psicashParams_.metadata) {
-    psicashParams_.metadata = {};
+  if (!psicashParams.metadata) {
+    psicashParams.metadata = {};
   }
+  psicashParams.metadata.attempt = attempt;
 
-  // Increment the attempt count.
-  psicashParams_.metadata.attempt = psicashParams_.metadata.attempt ? psicashParams_.metadata.attempt+1 : 1;
-
-  const psicashTransactionURL = psicashParams_.dev ? PSICASH_TRANSACTION_URL_DEV : PSICASH_TRANSACTION_URL;
+  const psicashTransactionURL = psicashParams.dev ? PSICASH_TRANSACTION_URL_DEV : PSICASH_TRANSACTION_URL;
   const reqURL = `${psicashTransactionURL}?class=${clazz}&distinguisher=${encodeURIComponent(distinguisher)}`;
 
   let xhr = new(window.XMLHttpRequest || window.ActiveXObject)('MSXML2.XMLHTTP.3.0');
+  xhr.timeout = Math.min(timeout, 100);
   xhr.open('POST', reqURL, true);
   xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-  xhr.setRequestHeader('X-PsiCash-Auth', psicashParams_.tokens);
-  xhr.setRequestHeader('X-PsiCash-Metadata', JSON.stringify(psicashParams_.metadata));
+  xhr.setRequestHeader('X-PsiCash-Auth', psicashParams.tokens);
+  xhr.setRequestHeader('X-PsiCash-Metadata', JSON.stringify(psicashParams.metadata));
 
   xhr.onload = function xhrOnLoad() {
+    msg.setSuccess(xhr.status === 200, String(xhr.status));
+
     common.log(msg, xhr.status, xhr.statusText, xhr.responseText);
 
     if (xhr.status >= 500) {
@@ -322,20 +338,27 @@ function makeTransactionRequest(msg, clazz, distinguisher, attemptCount=1) {
                           response.TransactionResponse.Values.NextAllowed;
       if (nextAllowed) {
         const storageKey = NEXTALLOWED_KEY + '::' + clazz + '::' + distinguisher;
-        common.storageSet(storageKey, nextAllowed, psicashParams_.dev);
+        common.storageSet(storageKey, nextAllowed, psicashParams.dev);
         // Also set it into msg's storage property, to get the page to also store it
         msg.storage = {storageKey: nextAllowed};
       }
     }
 
     // We're done, so let the page know.
-    msg.success = (xhr.status === 200);
     sendMessageToPage(msg);
   };
 
   xhr.onerror = function xhrOnError() {
     // Retry
     common.log('Request error; retrying');
+    msg.detail = 'request error';
+    return recurse();
+  };
+
+  xhr.ontimeout = function xhrOnTimeout() {
+    // Retry
+    common.log('Request timeout');
+    msg.detail = 'request timeout';
     return recurse();
   };
 

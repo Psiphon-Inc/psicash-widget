@@ -88,7 +88,7 @@ export class PsiCashParams {
  * Defines the structure of messages passed/posted between the page and iframe scripts.
  */
 export class Message {
-  constructor(type, payload, storage, error, success=true) {
+  constructor(type, payload, storage, error, success=true, detail='') {
     /** @type {string} */
     this.id = String(Math.random());
     /** @type {string} */
@@ -109,6 +109,24 @@ export class Message {
      * @type {boolean}
      */
     this.success = success;
+
+    /**
+     *
+     */
+    this.detail = detail;
+  }
+
+  /**
+   * Set the success information. Detail is optional; if not supplied, `this.detail` will
+   * not be modified.
+   * @param {boolean} success
+   * @param {?string} detail Optional
+   */
+  setSuccess(success, detail=undefined) {
+    this.success = success;
+    if (typeof detail !== 'undefined') {
+      this.detail = detail;
+    }
   }
 
   /**
@@ -121,7 +139,7 @@ export class Message {
       return null;
     }
     let j = JSON.parse(jsonString);
-    let m = new Message(j.type, j.payload, j.storage, j.error, j.success);
+    let m = new Message(j.type, j.payload, j.storage, j.error, j.success, j.detail);
     // The JSON will have its own id
     m.id = j.id;
     return m;
@@ -338,7 +356,33 @@ export function inWidgetIframe() {
  * @readonly
  */
 export const PsiCashAction = {
+  Init: 'init',
   PageView: 'page-view',
   ClickThrough: 'click-through'
 };
 
+/**
+ * Check if the given action name is valid -- that is, present in PsiCashAction.
+ * @param {string} action Possibly value action name
+ * @returns {boolean}
+ */
+export function PsiCashActionValid(action) {
+  return Object.values(PsiCashAction).indexOf(action) >= 0;
+}
+
+/**
+ * Get the default timeout for each action.
+ * @param {PsiCashAction} action
+ * @returns {number} Milliseconds
+ */
+export function PsiCashActionDefaultTimeout(action) {
+  switch (action) {
+    case PsiCashAction.Init:
+      return 10000;
+    case PsiCashAction.PageView:
+      return 2000;
+    case PsiCashAction.ClickThrough:
+      return 500;
+  }
+  return 1000;
+}
