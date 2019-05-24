@@ -239,6 +239,27 @@ describe('forced action timeouts', function() {
   });
 });
 
+describe('distinguisher mismatch', function() {
+  before(function() {
+    cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, this.psicashParams, false)).get('#init-done').should('have.text', 'DONE');
+  });
+
+  it('should disallow a bad distinguisher', function() {
+    cy.window().then(win => {
+      // We're not going to include 'init' in this test, as it will already have completed.
+      return Cypress.Promise.map(transActions, (action) => {
+        return new Cypress.Promise((resolve, reject) => {
+          win.psicash(action, {distinguisher: 'mismatch.com/nope'}, function(err, success, detail) {
+            expect(err).to.be.not.null;
+            resolve();
+          });
+        });
+      });
+    });
+
+  });
+});
+
 describe('actual success (after wait)', function() {
   before(function() {
     cy.clearLocalStorage(true, true);
@@ -267,7 +288,6 @@ describe('actual success (after wait)', function() {
 // happen and succeed.
 describe('actual success via JS calls (after wait) -- forced retries', function() {
   before(function() {
-    // Wait for a full minute, so that our requests will succeed
     cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, this.psicashParams, false)).get('#init-done').should('have.text', 'DONE');
   });
 
@@ -277,6 +297,7 @@ describe('actual success via JS calls (after wait) -- forced retries', function(
   });
 
   it('should succeed for transactions (cannot actually check for retries)', function() {
+    // Wait for a full minute, so that our requests will succeed
     cy.log('Waiting for one minute, to ensure success').wait(LONG_ENOUGH_WAIT);
 
     cy.window().then(win => {
@@ -291,6 +312,5 @@ describe('actual success via JS calls (after wait) -- forced retries', function(
         });
       });
     });
-
   });
 });
