@@ -34,6 +34,17 @@ const IFRAME_URL_PATH_DEBUG = '/v2/iframe.debug.html'; // DEBUG
 const IFRAME_STORAGE = 'iframeStorage';
 
 /**
+ * The URL of this script.
+ */
+const scriptURL_ = common.getCurrentScriptURL();
+
+/**
+ * The origin of the widget. This is used to ensure that messages received are coming
+ * from the right place.
+ */
+const widgetOrigin_ = common.getOrigin(common.urlComponents(scriptURL_));
+
+/**
  * The PsiCash widget iframe element. Will bet set when the iframe is created.
  * @type {HTMLIFrameElement}
  */
@@ -54,12 +65,9 @@ let psicashParams_;
  * @returns {!common.PsiCashParams}
  */
 function getPsiCashParams() {
-  const scriptURL = common.getCurrentScriptURL();
-  const scriptURLComponents = common.urlComponents(scriptURL);
-
   // The URL for this script may dev and/or debug flags
-  const urlDebug = common.getURLParam(scriptURL, common.DEBUG_URL_PARAM);
-  const urlDev = common.getURLParam(scriptURL, common.DEV_URL_PARAM);
+  const urlDebug = common.getURLParam(scriptURL_, common.DEBUG_URL_PARAM);
+  const urlDev = common.getURLParam(scriptURL_, common.DEV_URL_PARAM);
 
   /** @type {common.PsiCashParams} */
   let urlPsiCashParams, localPsiCashParams, finalPsiCashParams;
@@ -101,9 +109,6 @@ function getPsiCashParams() {
   // Prefer the payload from the URL.
   finalPsiCashParams = urlPsiCashParams || localPsiCashParams || new common.PsiCashParams();
 
-  finalPsiCashParams.widgetOrigin = common.getOrigin(scriptURLComponents);
-  finalPsiCashParams.pageURL = location.href;
-
   if (urlDebug !== null) {
     finalPsiCashParams.debug = urlDebug;
   }
@@ -125,7 +130,7 @@ function getPsiCashParams() {
 function loadIframe() {
   const iframeURLPath = psicashParams_.debug ? IFRAME_URL_PATH_DEBUG : IFRAME_URL_PATH;
   const paramsString = encodeURIComponent(JSON.stringify(psicashParams_));
-  let iframeSrc = `${psicashParams_.widgetOrigin}${iframeURLPath}#!`;
+  let iframeSrc = `${widgetOrigin_}${iframeURLPath}#!`;
   iframeSrc += `${common.PSICASH_URL_PARAM}=${paramsString}`;
   if (psicashParams_.dev !== null && psicashParams_.dev !== undefined) {
     iframeSrc += `&dev=${psicashParams_.dev}`;
@@ -205,17 +210,18 @@ function processIframeMessage(eventData) {
 /**
  * Send a message to the iframe.
  * @param {!string} type The message type
+ * @param {?number} timeout The time allowed for the message processing (not always applicable)
  * @param {?any} payload
  * @param {?ActionCallback} callback
  * @returns {!common.Message} The message object sent.
  */
-function sendMessageToIframe(type, payload, callback) {
+function sendMessageToIframe(type, timeout, payload, callback) {
   if (!iframeElement_ || !iframeElement_.contentWindow || !iframeElement_.contentWindow.postMessage) {
     // Nothing we can do.
     return;
   }
 
-  const msg = new common.Message(type, payload, common.storageGet(IFRAME_STORAGE, psicashParams_.dev));
+  const msg = new common.Message(type, timeout, payload, common.storageGet(IFRAME_STORAGE, psicashParams_.dev));
 
   if (callback) {
     pendingMessageCallbacks_[msg.id] = callback;
@@ -223,7 +229,8 @@ function sendMessageToIframe(type, payload, callback) {
 
   // Older IE has a limitation where only strings can be sent as the message, so we're
   // going to use JSON.
-  iframeElement_.contentWindow.postMessage(JSON.stringify(msg), psicashParams_.widgetOrigin);
+  const msgJSON = JSON.stringify(msg);
+  iframeElement_.contentWindow.postMessage(msgJSON, widgetOrigin_);
 
   return msg;
 }
@@ -240,9 +247,10 @@ function clearLocalStorage(page, iframe, callback) {
   }
 
   if (iframe) {
-    sendMessageToIframe('clear-localStorage', null, callback);
+    sendMessageToIframe('clear-localStorage', null, null, callback);
   }
   else {
+    // Ensure the callback is asynchronous.
     setTimeout(callback, 1);
   }
 }
@@ -270,7 +278,7 @@ function exposeDebugFunction(func, funcName) {
  */
 function psicash(action, obj, callback) {
   if (!common.PsiCashActionValid(action)) {
-    throw new Error('PsiCash action name is invalid: ' + action)
+    throw new Error('PsiCash action name is invalid: ' + action);
   }
 
   if (typeof obj === 'function') {
@@ -279,15 +287,17 @@ function psicash(action, obj, callback) {
   }
   obj = obj || {};
 
-  if (typeof obj.timeout === 'undefined') {
-    obj.timeout = common.PsiCashActionDefaultTimeout(action);
+  /** @type {?number} */
+  let timeout = obj.timeout;
+  if (typeof timeout !== 'number') {
+    timeout = common.PsiCashActionDefaultTimeout(action);
   }
 
-  const msg = sendMessageToIframe(action, obj, callback);
+  const msg = sendMessageToIframe(action, timeout, obj, callback);
 
   // We want to guarantee that the callback fires within the specified time. Hopefully
   // that will happen naturally, but we'll use a callback to ensure it.
-  if (obj.timeout) {
+  if (timeout) {
     setTimeout(() => {
       // This timeout will always fire, even if the action has already completed.
       // We can determine if the callback should be called if it's still in
@@ -299,7 +309,7 @@ function psicash(action, obj, callback) {
         // Delete the callback so it isn't called again.
         delete pendingMessageCallbacks_[msg.id];
       }
-    }, obj.timeout);
+    }, timeout);
   }
 }
 
@@ -346,7 +356,7 @@ function setUpPsiCashTag() {
   // The iframe script will inform us when the next allowed reward is.
   window.addEventListener('message', function pageMessageHandler(event) {
     // Make sure that only the widget iframe can communicate with us.
-    if (event.origin !== psicashParams_.widgetOrigin) {
+    if (event.origin !== widgetOrigin_) {
       return;
     }
     processIframeMessage(event.data);

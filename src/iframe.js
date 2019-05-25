@@ -27,18 +27,18 @@ const PSICASH_TRANSACTION_URL = 'https://api.psi.cash/v1/transaction'; // PROD
 const PSICASH_TRANSACTION_URL_DEV = 'https://dev-api.psi.cash/v1/transaction'; // DEV
 
 /**
- * The maximum number of attempts allowed for a single request.
- * (To be extra clear: 3 means 1 try and 2 retries.)
- * @const {number}
- */
-const MAX_REQUEST_ATTEMPTS = 3;
-
-/**
  * Key used to store the next-allowed value in localStorage and pass it back to the
  * landing page script.
  * @const {string}
  */
 const NEXTALLOWED_KEY = 'nextAllowed';
+
+/**
+ * If set, an unrecoverable error has occurred. This error will be returned with all
+ * iframe->page messages.
+ * @type {string}
+ */
+let globalFatalError_;
 
 /**
  * The PsiCashParams for this widget. Will be set during initialization.
@@ -75,36 +75,24 @@ function getIframePsiCashParams() {
   // Other fields will be merged.
 
   /** @type {common.PsiCashParams} */
-  let urlPsiCashParams, localPsiCashParams;
-  let finalPsiCashParams = new common.PsiCashParams();
+  let urlPsiCashParams, localPsiCashParams, finalPsiCashParams;
 
   let urlPayload = common.getURLParam(location.href, common.PSICASH_URL_PARAM);
-  if (!urlPayload) {
-    // We cannot proceed. Even if we can get tokens from localStorage, the page
-    // must send us pageURL, etc.
-    finalPsiCashParams.error = 'PsiCashParams missing from URL';
-    common.error(finalPsiCashParams.error);
-    return finalPsiCashParams;
-  }
-
-  urlPsiCashParams = common.PsiCashParams.fromObject(JSON.parse(urlPayload));
-
-  // At least pageURL _must_ be set.
-  if (!urlPsiCashParams.pageURL) {
-    finalPsiCashParams.error = 'PsiCashParams.pageURL missing from URL';
-    common.error(finalPsiCashParams.error);
-    return finalPsiCashParams;
+  if (urlPayload) {
+    urlPsiCashParams = common.PsiCashParams.fromObject(JSON.parse(urlPayload));
   }
 
   // Figure out if we should be looking in dev or prod storage for stored params
   const useDevStorage =  (urlDev !== null && urlDev) || (urlPsiCashParams && urlPsiCashParams.dev);
 
   let localPayload = common.storageGet(common.PARAMS_STORAGE_KEY, useDevStorage);
-  localPsiCashParams = common.PsiCashParams.fromObject(localPayload);
+  if (localPayload) {
+    localPsiCashParams = common.PsiCashParams.fromObject(localPayload);
+  }
 
   // We prefer the contents of urlPsiCashParams over localPsiCashParams, but some fields
   // might be overridden.
-  finalPsiCashParams = urlPsiCashParams;
+  finalPsiCashParams = urlPsiCashParams || localPsiCashParams || new common.PsiCashParams();
 
   // If the URL tokenPriority is 0, then we should use the local tokens, if available.
   if (!finalPsiCashParams.tokensPriority // tests for undefined, null, and 0
@@ -114,8 +102,8 @@ function getIframePsiCashParams() {
 
   // Ensure tokens are present at this point.
   if (!finalPsiCashParams.tokens) {
-    finalPsiCashParams.error = 'no tokens in PsiCashParams';
-    common.error(finalPsiCashParams.error);
+    globalFatalError_ = 'no tokens in PsiCashParams';
+    common.error(globalFatalError_);
     return finalPsiCashParams;
   }
 
@@ -151,9 +139,9 @@ function processPageMessage(eventData) {
     return;
   }
 
-  if (psicashParams_.error) {
+  if (globalFatalError_) {
     // Something unrecoverable has occurred. Do not try to proceed with a request.
-    msg.error = psicashParams_.error;
+    msg.error = globalFatalError_;
     sendMessageToPage(msg);
     return;
   }
@@ -185,7 +173,7 @@ function processPageMessage(eventData) {
     return;
   }
 
-  makeTransactionRequest(msg, clazz, distinguisher);
+  makeTransactionRequest(msg, clazz, distinguisher, msg.timeout);
 }
 
 /**
@@ -199,7 +187,7 @@ function sendMessageToPage(msg) {
     return;
   }
 
-  msg.error = msg.error || psicashParams_.error || null;
+  msg.error = msg.error || globalFatalError_ || null;
 
   // Older IE has a limitation where only strings can be sent as the message, so we're
   // going to use JSON.
@@ -219,7 +207,7 @@ function validateDistinguisher(distinguisher) {
   // A bad match we're defending against here: If the distinguisher is
   // hostname.com and the attacker uses a domain like hostname.com.nogood.com
 
-  const pageURLComponents = common.urlComponents(psicashParams_.pageURL);
+  const pageURLComponents = common.urlComponents(document.referrer);
 
   const pageHost = common.getHost(pageURLComponents);
   const distinguisherHost = distinguisher.split('/')[0];
@@ -265,7 +253,7 @@ function getDistinguisher(msg) {
   if (msg.payload && msg.payload.distinguisher) {
     return msg.payload.distinguisher;
   }
-  return common.getHost(common.urlComponents(psicashParams_.pageURL));
+  return common.getHost(common.urlComponents(document.referrer));
 }
 
 /**
@@ -281,8 +269,11 @@ function getDistinguisher(msg) {
  * @param {common.PsiCashParams} psicashParams The params object to use and modify. Must only be set by recursive calls.
  */
 function makeTransactionRequest(msg, clazz, distinguisher, timeout, start=Date.now(), attempt=1, psicashParams=null) {
+  // We're going to interpret "no timeout" as 100s.
+  timeout = timeout || 100000;
+
   function recurse() {
-    if (Date.now() - start > timeout) {
+    if ((Date.now() - start) > timeout) {
       // We failed all of our attempts and ran out of time.
       // Let the page script know that we're done.
       // We're not going to set msg.error, as this might be transient and recoverable.
@@ -373,10 +364,16 @@ function makeTransactionRequest(msg, clazz, distinguisher, timeout, start=Date.n
     return;
   }
 
+  if (!document.referrer) {
+    // The user has disabled referrers. We will never be able to validate a
+    // distinguisher and basically can't proceed.
+    globalFatalError_ = 'document.referrer is unavailable';
+  }
+
   psicashParams_ = getIframePsiCashParams();
 
-  // Also keep a global page origin, so we don't have to keep re-parsing it
-  pageOrigin_ = common.getOrigin(common.urlComponents(psicashParams_.pageURL));
+  // Keep a global page origin, so we don't have to keep re-parsing it.
+  pageOrigin_ = common.getOrigin(common.urlComponents(document.referrer));
 
   window.addEventListener('message', function iframeMessageHandler(event) {
     // Make sure that only the parent page can communicate with us.

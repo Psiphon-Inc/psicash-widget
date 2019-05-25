@@ -32,7 +32,7 @@ export const DEV_URL_PARAM = 'dev';
  * between the page and iframe.
  */
 export class PsiCashParams {
-  constructor(tokens, tokensPriority, metadata, widgetOrigin, pageURL, dev, debug, error) {
+  constructor(tokens, tokensPriority, metadata, dev, debug) {
     /** @type {string} */
     this.tokens = tokens;
     /**
@@ -43,22 +43,16 @@ export class PsiCashParams {
      * @type {number}
      */
     this.tokensPriority = tokensPriority;
-    /** @type {Object} */
+    /**
+     * This is information that is included in requests to the PsiCash server, provided by
+     * the app.
+     * @type {Object}
+     */
     this.metadata = metadata;
-    /** @type {string} */
-    this.widgetOrigin = widgetOrigin;
-    /** @type {string} */
-    this.pageURL = pageURL;
     /** @type {any} */
     this.dev = dev;
     /** @type {any} */
     this.debug = debug;
-
-    /**
-     * If truthy, then we are in an irrecoverable error state.
-     * @type {string}
-     * */
-    this.error = error;
   }
 
   /**
@@ -70,8 +64,8 @@ export class PsiCashParams {
       return null;
     }
 
-    let {tokens, tokensPriority, metadata, widgetOrigin, pageURL, dev, debug, error} = obj;
-    return new PsiCashParams(tokens, tokensPriority, metadata, widgetOrigin, pageURL, dev, debug, error);
+    let {tokens, tokensPriority, metadata, dev, debug} = obj;
+    return new PsiCashParams(tokens, tokensPriority, metadata, dev, debug);
   }
 
   /**
@@ -88,11 +82,26 @@ export class PsiCashParams {
  * Defines the structure of messages passed/posted between the page and iframe scripts.
  */
 export class Message {
-  constructor(type, payload, storage, error, success=true, detail='') {
+  /**
+   * Constructs a Message.
+   * @param {string} type
+   * @param {number} timeout
+   * @param {any} payload
+   * @param {Object} storage
+   * @param {string} error
+   * @param {boolean} success
+   * @param {string} detail
+   */
+  constructor(type, timeout=null, payload=null, storage=null, error=null, success=true, detail='') {
     /** @type {string} */
     this.id = String(Math.random());
     /** @type {string} */
     this.type = type;
+    /**
+     * The amount of time allowed for an action. May not be applicable to all messages.
+     * @type {number}
+     */
+    this.timeout = timeout;
     /** @type {any} */
     this.payload = payload;
     /** @type {Object} */
@@ -111,7 +120,8 @@ export class Message {
     this.success = success;
 
     /**
-     *
+     * Additional detail about the success or failure of message processing.
+     * @type {string}
      */
     this.detail = detail;
   }
@@ -139,7 +149,7 @@ export class Message {
       return null;
     }
     let j = JSON.parse(jsonString);
-    let m = new Message(j.type, j.payload, j.storage, j.error, j.success, j.detail);
+    let m = new Message(j.type, j.timeout, j.payload, j.storage, j.error, j.success, j.detail);
     // The JSON will have its own id
     m.id = j.id;
     return m;
