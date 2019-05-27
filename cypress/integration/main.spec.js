@@ -150,6 +150,7 @@ describe('no iframe storage (like Safari)', function() {
     cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, this.psicashParams, true)).get('#init-done').should('have.text', 'DONE');
     // Clear iframe storage.
     cy.clearLocalStorage(false, true);
+    // Visit with no params/tokens in URL
     cy.psivisit(helpers.url()).get('#init-done').should('have.text', 'DONE');
   });
 
@@ -182,8 +183,9 @@ describe('no page storage (like direct visit to new landing page)', function() {
   before(function() {
     // Load params into storage
     cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, this.psicashParams, true)).get('#init-done').should('have.text', 'DONE');
-    // Clear iframe storage.
+    // Clear page storage.
     cy.clearLocalStorage(true, false);
+    // Visit with no params/tokens in URL
     cy.psivisit(helpers.url()).get('#init-done').should('have.text', 'DONE');
   });
 
@@ -221,7 +223,7 @@ describe('forced action timeouts', function() {
   it('should timeout', function() {
     // Sleep so that we don't hit a local 'not yet allowed' check that might return
     // quicker than our timeout.
-    cy.log('Waiting for one minute, to ensure success').wait(LONG_ENOUGH_WAIT);
+    cy.log('Waiting for a while, to ensure success').wait(LONG_ENOUGH_WAIT);
     cy.window().then(win => {
       // We're not going to include 'init' in this test, as it will already have completed.
       return Cypress.Promise.map(transActions, (action) => {
@@ -265,7 +267,7 @@ describe('actual success (after wait)', function() {
     cy.clearLocalStorage(true, true);
 
     // Wait for a full minute, so that our requests will succeed
-    cy.log('Waiting for one minute, to ensure success').wait(LONG_ENOUGH_WAIT);
+    cy.log('Waiting for a while, to ensure success').wait(LONG_ENOUGH_WAIT);
     cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, this.psicashParams, false)).get('#init-done').should('have.text', 'DONE');
   });
 
@@ -298,7 +300,7 @@ describe('actual success via JS calls (after wait) -- forced retries', function(
 
   it('should succeed for transactions (cannot actually check for retries)', function() {
     // Wait for a full minute, so that our requests will succeed
-    cy.log('Waiting for one minute, to ensure success').wait(LONG_ENOUGH_WAIT);
+    cy.log('Waiting for a while, to ensure success').wait(LONG_ENOUGH_WAIT);
 
     cy.window().then(win => {
       // We're not going to include 'init' in this test, as it will already have completed.
