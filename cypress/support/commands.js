@@ -35,15 +35,17 @@ import * as helpers from '../support/helpers';
 Cypress.Commands.add('psivisit', (url) => {
   cy.log(`psivisit; url:${url}`);
 
+  // Because our tests all use the same page, assume that the presence of a hash means
+  // we need to force the reload.
   if (url.indexOf('#') < 0) {
     // There's no hash in URL, so no special handling necessary
     cy.visit(url);
     return;
   }
 
-  // Because our tests all use the same page, assume that the presence of a hash means
-  // we need to force the reload.
-  cy.visit(url).reload();
+  // We'll force a hard navigation by first going to a nonexistent page, then to the
+  // actual URL.
+  cy.visit('/psivisit-nonexistent', {failOnStatusCode: false}).visit(url);
 });
 
 Cypress.Commands.add('clearLocalStorage', (page, iframe) => {

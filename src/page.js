@@ -351,6 +351,13 @@ function setUpPsiCashTag() {
     return;
   }
 
+  // Disallow this widget from being loaded into an iframe. This isn't a restriction of
+  // the widget so much as a mitigation against an earning attack that iframes our landing
+  // pages. See: https://github.com/Psiphon-Inc/psiphon-issues/issues/554
+  if (common.inIframe()) {
+    throw new Error('The widget must not be put in an iframe');
+  }
+
   psicashParams_ = getPsiCashParams();
 
   // The iframe script will inform us when the next allowed reward is.

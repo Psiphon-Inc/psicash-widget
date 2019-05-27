@@ -355,9 +355,25 @@ export function getCurrentScriptURL() {
  * @returns {boolean}
  */
 export function inWidgetIframe() {
+  // We're not going to do an inIFrame() check because it returns an incorrect result
+  // during Cypress testing, and because it doesn't add any extra important info to the check.
+
   const scriptURLComp = urlComponents(getCurrentScriptURL());
   const pageURLComp = urlComponents(location.href);
   return getHost(scriptURLComp) === getHost(pageURLComp);
+}
+
+/**
+ * Check if the current script is running in an iframe.
+ * From: https://stackoverflow.com/a/326076
+ * @returns {boolean}
+ */
+export function inIframe() {
+  try {
+    return window.self !== window.top;
+  } catch (e) {
+    return true;
+  }
 }
 
 /**
@@ -387,12 +403,12 @@ export function PsiCashActionValid(action) {
  */
 export function PsiCashActionDefaultTimeout(action) {
   switch (action) {
-    case PsiCashAction.Init:
-      return 10000;
-    case PsiCashAction.PageView:
-      return 2000;
-    case PsiCashAction.ClickThrough:
-      return 500;
+  case PsiCashAction.Init:
+    return 10000;
+  case PsiCashAction.PageView:
+    return 2000;
+  case PsiCashAction.ClickThrough:
+    return 500;
   }
   return 1000;
 }
