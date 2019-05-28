@@ -271,9 +271,10 @@ function getDistinguisher(msg) {
 function makeTransactionRequest(msg, clazz, distinguisher, timeout, start=Date.now(), attempt=1, psicashParams=null) {
   // We're going to interpret "no timeout" as 100s.
   timeout = timeout || 100000;
+  const remainingTime = timeout - (Date.now() - start);
 
   function recurse() {
-    if ((Date.now() - start) > timeout) {
+    if (remainingTime < 0) {
       // We failed all of our attempts and ran out of time.
       // Let the page script know that we're done.
       // We're not going to set msg.error, as this might be transient and recoverable.
@@ -302,7 +303,7 @@ function makeTransactionRequest(msg, clazz, distinguisher, timeout, start=Date.n
   const reqURL = `${psicashTransactionURL}?class=${clazz}&distinguisher=${encodeURIComponent(distinguisher)}`;
 
   let xhr = new(window.XMLHttpRequest || window.ActiveXObject)('MSXML2.XMLHTTP.3.0');
-  xhr.timeout = Math.min(timeout, 100);
+  xhr.timeout = remainingTime;
   xhr.open('POST', reqURL, true);
   xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
   xhr.setRequestHeader('X-PsiCash-Auth', psicashParams.tokens);

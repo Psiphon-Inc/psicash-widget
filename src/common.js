@@ -406,9 +406,9 @@ export function PsiCashActionDefaultTimeout(action) {
   case PsiCashAction.Init:
     return 10000;
   case PsiCashAction.PageView:
-    return 2000;
+    return 10000;
   case PsiCashAction.ClickThrough:
-    return 500;
+    return 1000;
   }
-  return 1000;
+  return 2000;
 }
