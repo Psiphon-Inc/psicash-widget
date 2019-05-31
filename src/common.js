@@ -184,6 +184,34 @@ function localStorageKey(keySuffix, dev) {
   return keySuffix;
 }
 
+let localStorageOKLogged = false;
+/**
+ * Check if we can use localStorage. This is commonly the case when privacy-enchanced
+ * browsers (Brave, or Chrome with certain settings) deny access to it from iframes.
+ * @returns {boolean}
+ */
+function localStorageOK() {
+  try {
+    if (!window.localStorage) {
+      if (!localStorageOKLogged) {
+        log('window.localStorage unavailable');
+        localStorageOKLogged = true;
+      }
+      return false;
+    }
+  }
+  catch (e) {
+    // Attempting to access window.localStorage may throw an exception. See:
+    // https://www.chromium.org/for-testers/bug-reporting-guidelines/uncaught-securityerror-failed-to-read-the-localstorage-property-from-window-access-is-denied-for-this-document
+    if (!localStorageOKLogged) {
+      log('window.localStorage inaccessible: ' + e);
+      localStorageOKLogged = true;
+    }
+    return false;
+  }
+  return true;
+}
+
 /**
  * Retrieve data from local storage.
  * @param {!string} key
@@ -191,9 +219,7 @@ function localStorageKey(keySuffix, dev) {
  * @returns {?any} null if the key wasn't set (or if null was stored).
  */
 export function storageGet(key, dev) {
-  if (!window.localStorage) {
-    // The widget probably isn't going to function, but we'll try to behave gracefully
-    log('window.localStorage unavailable');
+  if (!localStorageOK()) {
     return null;
   }
 
@@ -213,10 +239,8 @@ export function storageGet(key, dev) {
  * @param {any} dev Truthy, indicates if this is using PsiCash-Dev rather than Prod.
  */
 export function storageSet(key, val, dev) {
-  if (!window.localStorage) {
-    // The widget probably isn't going to function, but we'll try to behave gracefully
-    log('window.localStorage unavailable');
-    return null;
+  if (!localStorageOK()) {
+    return;
   }
 
   key = localStorageKey(key, dev);
