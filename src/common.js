@@ -267,7 +267,7 @@ export function storageMerge(obj, preferObj, dev) {
 
 /**
  * Logs arguments to console.
- * Just a wrapper for console.log to prevenst trying to use it if it doesn't exist.
+ * Just a wrapper for console.log to prevent trying to use it if it doesn't exist.
  */
 export function log() {
   let argsArray = Array.prototype.slice.call(arguments);

@@ -115,7 +115,7 @@ function webserver(cb) {
 
 function gitInfo(cb) {
   let cmd = `git describe --always --long --dirty --tags > ${config.dist.widget}/git.txt`;
-  exec(cmd, function(stdout, stderr, err) {
+  exec(cmd, function(err/*, stdout, stderr*/) {
     cb(err);
   });
 }
