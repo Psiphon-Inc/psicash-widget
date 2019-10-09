@@ -128,3 +128,7 @@ Both `async` and `defer` are included [because](https://html.spec.whatwg.org/mul
 ```
 
 The code in that iframe performs the requested transactions with the PsiCash server.
+
+## License
+
+See the `LICENSE` file.
