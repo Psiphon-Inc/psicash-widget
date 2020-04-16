@@ -30,6 +30,10 @@ $ gulp serve
 $ npx cypress open
 ```
 
+**NOTE**: If test requests are failing:
+* It could be because the dev env DB has been reset and the fixture token in `cypress/fixtures/params.json` is no longer valid. Replace with a new one.
+* It could be because the `http://localhost:44444` hasn't been added as an allowed origin to the test server. See below.
+
 Deploy to S3 (with [credentials set up](https://docs.aws.amazon.com/sdk-for-javascript/v2/developer-guide/configuring-the-jssdk.html)):
 ```
 $ gulp build && gulp deploy
