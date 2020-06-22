@@ -10,10 +10,21 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://api.psi.cash; base-uri 'none'; form-action 'none'">
     -->
 
-    <script type="text/javascript" src="https://getfirebug.com/firebug-lite.js"></script>
-    <script src="psicash.js?debug=1"></script>
   </head>
   <body>
     <h1>PsiCash Iframe Contents</h1>
+
+    <ul id="logs">
+    </ul>
+
+    <script>
+      function logger() {
+        const logElem = document.createElement('li');
+        logElem.textContent = JSON.stringify(arguments);
+        document.getElementById('logs').appendChild(logElem);
+      }
+      console.log = console.error = console.warn = logger;
+    </script>
+    <script src="psicash.js?debug=1"></script>
   </body>
 </html>
