@@ -299,6 +299,10 @@ function makeTransactionRequest(msg, clazz, distinguisher, timeout, start=Date.n
   }
   psicashParams.metadata.attempt = attempt;
 
+  // For logging and debugging purposes, record the referrer in the metadata, but _not_
+  // with any potentially-identifying query params or hash.
+  psicashParams.metadata.referrer = pageOrigin_ + common.urlComponents(document.referrer).pathname;
+
   const psicashTransactionURL = psicashParams.dev ? PSICASH_TRANSACTION_URL_DEV : PSICASH_TRANSACTION_URL;
   const reqURL = `${psicashTransactionURL}?class=${clazz}&distinguisher=${encodeURIComponent(distinguisher)}`;
 
