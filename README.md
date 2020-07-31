@@ -133,6 +133,28 @@ Both `async` and `defer` are included [because](https://html.spec.whatwg.org/mul
 
 The code in that iframe performs the requested transactions with the PsiCash server.
 
+### Accessing the PsiCash parameters
+
+The info passed in the `#!psicash=`/`?psicash=` PsiCash URL parameters is exposed to the web page. This can be useful when trying to determine the platform and version of the client app. The info can be accessed like so:
+
+```javascript
+window._psicash.params()
+
+{
+  "tokens": "<tokens>",
+  "tokensPriority": 0,
+  "metadata": {
+    "client_region": "CA",
+    "client_version": "156",
+    "propagation_channel_id": "ABCD1234",
+    "sponsor_id": "ABCD1234",
+    "user_agent": "Psiphon-PsiCash-Windows",
+    "v": 1
+  },
+  "debug": "0"
+}
+```
+
 ## License
 
 See the `LICENSE` file.

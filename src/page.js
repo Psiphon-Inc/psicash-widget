@@ -254,15 +254,16 @@ function clearLocalStorage(page, iframe, callback) {
     setTimeout(callback, 1);
   }
 }
-exposeDebugFunction(clearLocalStorage, 'clearLocalStorage');
+exposeToWindow(true, clearLocalStorage, 'clearLocalStorage');
 
 /**
  * Expose a function to the page, on `window._psicash`.
+ * @param {boolean} debugOnly Only exposes the function if debug mode is detected.
  * @param {function} func
  * @param {string} funcName
  */
-function exposeDebugFunction(func, funcName) {
-  if (!window.Cypress) {
+function exposeToWindow(debugOnly, func, funcName) {
+  if (debugOnly && !window.Cypress) {
     return;
   }
   window._psicash = window._psicash || {};
@@ -316,7 +317,6 @@ function psicash(action, obj, callback) {
 /**
  * Possible values for the action argument of psicash().
  * @enum {string}
- * @readonly
  */
 psicash.Action = common.PsiCashAction;
 
@@ -359,6 +359,11 @@ function setUpPsiCashTag() {
   }
 
   psicashParams_ = getPsiCashParams();
+
+  // Widget-using pages sometimes need to access client platform and version in order to
+  // decide what to show, etc. We'll expose a copy of our parameters -- the metadata
+  // contains that info.
+  exposeToWindow(false, () => JSON.parse(JSON.stringify(psicashParams_)), 'params');
 
   // The iframe script will inform us when the next allowed reward is.
   window.addEventListener('message', function pageMessageHandler(event) {
