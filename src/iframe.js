@@ -70,35 +70,20 @@ function getIframePsiCashParams() {
     urlDev = urlDev || common.getURLParam(url, common.DEV_URL_PARAM);
   }
 
-  // The widget passes PsiCashParams via URL, and we might have stored some from a
-  // previous request. Which tokens we use will depend on the priority of the URL tokens.
-  // Other fields will be merged.
+  // The widget passes PsiCashParams via the iframe URL, and we might have stored some
+  // from a previous request. Which tokens we use will depend on the timestamp of the
+  // tokens in the iframe URL.
 
-  /** @type {common.PsiCashParams} */
-  let urlPsiCashParams, localPsiCashParams, finalPsiCashParams;
-
-  let urlPayload = common.getURLParam(location.href, common.PSICASH_URL_PARAM);
-  if (urlPayload) {
-    urlPsiCashParams = common.PsiCashParams.fromObject(JSON.parse(urlPayload));
-  }
+  const urlPayload = common.getURLParam(location.href, common.PSICASH_URL_PARAM);
+  const urlPsiCashParams = common.PsiCashParams.fromObject(JSON.parse(urlPayload));
 
   // Figure out if we should be looking in dev or prod storage for stored params
   const useDevStorage =  (urlDev !== null && urlDev) || (urlPsiCashParams && urlPsiCashParams.dev);
 
-  let localPayload = common.storageGet(common.PARAMS_STORAGE_KEY, useDevStorage);
-  if (localPayload) {
-    localPsiCashParams = common.PsiCashParams.fromObject(localPayload);
-  }
+  const localPayload = common.storageGet(common.PARAMS_STORAGE_KEY, useDevStorage);
+  const localPsiCashParams = common.PsiCashParams.fromObject(localPayload);
 
-  // We prefer the contents of urlPsiCashParams over localPsiCashParams, but some fields
-  // might be overridden.
-  finalPsiCashParams = urlPsiCashParams || localPsiCashParams || new common.PsiCashParams();
-
-  // If the URL tokenPriority is 0, then we should use the local tokens, if available.
-  if (!finalPsiCashParams.tokensPriority // tests for undefined, null, and 0
-      && localPsiCashParams && localPsiCashParams.tokens) {
-    finalPsiCashParams.tokens = localPsiCashParams.tokens;
-  }
+  const finalPsiCashParams = common.PsiCashParams.newest(urlPsiCashParams, localPsiCashParams) || new common.PsiCashParams();
 
   // Ensure tokens are present at this point.
   if (!finalPsiCashParams.tokens) {

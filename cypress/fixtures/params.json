@@ -1,5 +1,6 @@
 {
   "debug": 0, "dev": 1,
   "metadata":  {"v": 1, "user_agent": "Psiphon-PsiCash-Windows", "client_region": "CA", "client_version": "9999", "propagation_channel_id": "ABCD1234", "sponsor_id": "ABCD1234" },
-  "tokens":"5288be3aec0c8478947b0e2970bed1f288ca4ed1c89b2453d6e8558170adcfe9", "v":1
+  "tokens": "ed9a5cbbb067640c17702bc7aa39f48826dbcbfbab3c68b20c85c86c06c04928", "tokens_timestamp": "2020-09-29T20:21:33.123Z",
+  "v": 1
 }

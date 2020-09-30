@@ -69,16 +69,12 @@ function getPsiCashParams() {
   const urlDebug = common.getURLParam(scriptURL_, common.DEBUG_URL_PARAM);
   const urlDev = common.getURLParam(scriptURL_, common.DEV_URL_PARAM);
 
-  /** @type {common.PsiCashParams} */
-  let urlPsiCashParams, localPsiCashParams, finalPsiCashParams;
-
-  // We'll look in the URL and in localStorage for the payload, but we'll prefer
-  // the URL, because it's where tokens will get updated when they change.
-  // The params payload is transferred as URL-encoded JSON (possibly base64).
+  // We'll look in the URL and in localStorage for the payload. We will prefer params with
+  // the most recent `tokensTimestamp`.
 
   let urlPayload = common.getURLParam(location.href, common.PSICASH_URL_PARAM);
 
-  // Check if the payload is base64-encoded
+  // The params payload is transferred as URL-encoded JSON (possibly base64).
   try {
     if (urlPayload) {
       urlPayload = window.atob(urlPayload);
@@ -89,25 +85,14 @@ function getPsiCashParams() {
   }
 
   urlPayload = JSON.parse(urlPayload);
-
-  if (urlPayload) {
-    urlPsiCashParams = common.PsiCashParams.fromObject(urlPayload);
-    if (urlPsiCashParams.tokens) {
-      urlPsiCashParams.tokensPriority = 1; // URL tokens have higher priority
-    }
-  }
+  const urlPsiCashParams = common.PsiCashParams.fromObject(urlPayload);
 
   // Figure out if we should be looking in dev or prod storage for stored params
   const useDevStorage =  (urlDev !== null && urlDev) || (urlPsiCashParams && urlPsiCashParams.dev);
+  const localPayload = common.storageGet(common.PARAMS_STORAGE_KEY, useDevStorage);
+  const localPsiCashParams = common.PsiCashParams.fromObject(localPayload);
 
-  let localPayload = common.storageGet(common.PARAMS_STORAGE_KEY, useDevStorage);
-  if (localPayload) {
-    localPsiCashParams = common.PsiCashParams.fromObject(localPayload);
-    localPsiCashParams.tokensPriority = 0; // Locally-stored tokens have lower priority
-  }
-
-  // Prefer the payload from the URL.
-  finalPsiCashParams = urlPsiCashParams || localPsiCashParams || new common.PsiCashParams();
+  const finalPsiCashParams = common.PsiCashParams.newest(urlPsiCashParams, localPsiCashParams) || new common.PsiCashParams();
 
   if (urlDebug !== null) {
     finalPsiCashParams.debug = urlDebug;

@@ -32,17 +32,38 @@ export const DEV_URL_PARAM = 'dev';
  * between the page and iframe.
  */
 export class PsiCashParams {
-  constructor(tokens, tokensPriority, metadata, dev, debug) {
+  constructor(tokens, tokensTimestamp, metadata, dev, debug, tokensPriority=null) {
     /** @type {string} */
     this.tokens = tokens;
     /**
-     * Will be 0 for low and 1 for high. High priority
-     *   tokens come from the landing page URL (which come from the app) and supersede any
-     *   stored tokens.
-     *   See https://github.com/Psiphon-Inc/psiphon-issues/issues/432 for more details.
-     * @type {number}
+     * Timestamp of when the tokens were issued; used to indicate which tokens should be
+     * used. Supersedes the old `tokensPriority`, but we'll be backwards compatible.
+     * We're going to assume that tokens with a timestamp are newer than those without,
+     * so we're going to use `Date(0)` (1970-01-01) for priority 0 and `Date(1)` (1970-01-01 +1ms)
+     * for priority 1. This will allow us to do simple comparisons between them and
+     * new-style timestamps.
+     * If `tokensTimestamp` is absent _and_ `tokensPriority` is absent, we'll default to
+     * to a priority of 1. This echoes what we used to do, and the fact that the params
+     * are likely coming from a client rather than localStorage (the former has higher
+     * priority than the former). (If they were coming from localStorage they would have
+     * at a `tokensPriority`.)
+     * @type {string}
      */
-    this.tokensPriority = tokensPriority;
+    this.tokensTimestamp = undefined;
+    if (tokens) {
+      if (tokensTimestamp) {
+        this.tokensTimestamp = tokensTimestamp
+      }
+      else if (typeof tokensPriority === 'number') {
+        // (can't use a truthy check because 0 is valid but falsy)
+        this.tokensTimestamp = new Date(tokensPriority).toISOString();
+      }
+      else {
+        this.tokensTimestamp = new Date(1).toISOString();
+      }
+    }
+    // else leave it undefined
+
     /**
      * This is information that is included in requests to the PsiCash server, provided by
      * the app.
@@ -56,16 +77,16 @@ export class PsiCashParams {
   }
 
   /**
-   * Create a new PsiCashParams instance from obj.
-   * @param {Object} obj
+   * Create a new PsiCashParams instance from obj. Returns null if obj is null;
+   * @param {?Object} obj
    */
   static fromObject(obj) {
     if (!obj) {
       return null;
     }
 
-    let {tokens, tokensPriority, metadata, dev, debug} = obj;
-    return new PsiCashParams(tokens, tokensPriority, metadata, dev, debug);
+    let {tokens, tokensTimestamp, metadata, dev, debug, tokensPriority} = obj;
+    return new PsiCashParams(tokens, tokensTimestamp, metadata, dev, debug, tokensPriority);
   }
 
   /**
@@ -75,6 +96,24 @@ export class PsiCashParams {
    */
   equal(cmp) {
     return JSON.stringify(this) === JSON.stringify(cmp);
+  }
+
+  /**
+   * Compares a and b and returns the object that has the newest tokens (timestamp).
+   * Returns null if neither has valid tokens.
+   * @param {?PsiCashParams} a
+   * @param {?PsiCashParams} b
+   * @returns {?PsiCashParams}
+   */
+  static newest(a, b) {
+    if (!a || !a.tokensTimestamp) {
+      return b;
+    }
+    else if (!b || !b.tokensTimestamp) {
+      return a;
+    }
+
+    return (a.tokensTimestamp > b.tokensTimestamp) ? a : b;
   }
 }
 

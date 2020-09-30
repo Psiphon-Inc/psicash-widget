@@ -142,7 +142,7 @@ window._psicash.params()
 
 {
   "tokens": "<tokens>",
-  "tokensPriority": 0,
+  "tokens_timestamp": "2020-09-29T19:52:44Z",
   "metadata": {
     "client_region": "CA",
     "client_version": "156",
