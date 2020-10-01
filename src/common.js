@@ -85,7 +85,10 @@ export class PsiCashParams {
       return null;
     }
 
-    let {tokens, tokensTimestamp, metadata, dev, debug, tokensPriority} = obj;
+    // We'll be getting `tokens_timestamp` from the library via the URL, but storing
+    // `tokensPriority`, so we'll accept both.
+    let tokensTimestamp = obj.tokens_timestamp || obj.tokensTimestamp;
+    let { tokens, metadata, dev, debug, tokensPriority } = obj;
     return new PsiCashParams(tokens, tokensTimestamp, metadata, dev, debug, tokensPriority);
   }
 
