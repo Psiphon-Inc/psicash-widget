@@ -247,7 +247,7 @@ function isRewardAllowed(clazz, distinguisher) {
 
   const allowedNow = nextAllowed.getTime() < now.getTime();
   if (!allowedNow) {
-    common.log(`${clazz} reward not yet allowed; next allowed = ${nextAllowed}`);
+    common.log(`${clazz} reward not yet allowed; next allowed = ${nextAllowed}`, `dev-env:${!!psicashParams_.dev}`);
   }
 
   return allowedNow;
@@ -326,15 +326,15 @@ function makeTransactionRequest(msg, clazz, distinguisher, timeout, start=Date.n
   xhr.onload = function xhrOnLoad() {
     msg.setSuccess(xhr.status === 200, String(xhr.status));
 
-    common.log(msg, xhr.status, xhr.statusText, xhr.responseText);
+    common.log(msg, xhr.status, xhr.statusText, xhr.responseText, `dev-env:${!!psicashParams.dev}`);
 
     if (xhr.status >= 500) {
       // Retry
-      common.log('Request failed with 500; retrying');
+      common.log('Request failed with 500; retrying', `dev-env:${!!psicashParams.dev}`);
       return recurse();
     }
     else if (xhr.status === 200) {
-      common.log(`Successful ${clazz} reward for ${distinguisher}`);
+      common.log(`Successful ${clazz} reward for ${distinguisher}`, `dev-env:${!!psicashParams.dev}`);
 
       // Store the NextAllowed datetime in the response to limit our future attempts.
       const response = JSON.parse(xhr.responseText);
@@ -356,14 +356,14 @@ function makeTransactionRequest(msg, clazz, distinguisher, timeout, start=Date.n
 
   xhr.onerror = function xhrOnError() {
     // Retry
-    common.log('Request error; retrying');
+    common.log('Request error; retrying', `dev-env:${!!psicashParams.dev}`);
     msg.detail = 'request error';
     return recurse();
   };
 
   xhr.ontimeout = function xhrOnTimeout() {
     // Retry
-    common.log('Request timeout');
+    common.log('Request timeout', `dev-env:${!!psicashParams.dev}`);
     msg.detail = 'request timeout';
     return recurse();
   };
