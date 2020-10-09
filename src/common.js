@@ -32,38 +32,15 @@ export const DEV_URL_PARAM = 'dev';
  * between the page and iframe.
  */
 export class PsiCashParams {
-  constructor(tokens, tokensTimestamp, metadata, dev, debug, tokensPriority=null) {
+  constructor(tokens, tokensTimestamp, metadata, dev, debug) {
     /** @type {string} */
     this.tokens = tokens;
     /**
-     * Timestamp of when the tokens were issued; used to indicate which tokens should be
-     * used. Supersedes the old `tokensPriority`, but we'll be backwards compatible.
-     * We're going to assume that tokens with a timestamp are newer than those without,
-     * so we're going to use `Date(0)` (1970-01-01) for priority 0 and `Date(1)` (1970-01-01 +1ms)
-     * for priority 1. This will allow us to do simple comparisons between them and
-     * new-style timestamps.
-     * If `tokensTimestamp` is absent _and_ `tokensPriority` is absent, we'll default to
-     * to a priority of 1. This echoes what we used to do, and the fact that the params
-     * are likely coming from a client rather than localStorage (the former has higher
-     * priority than the former). (If they were coming from localStorage they would have
-     * at a `tokensPriority`.)
+     * Timestamp of when the tokens were issued; used to prioritize which tokens should be used.
+     * This will be undefined for params from older clients or stored previously.
      * @type {string}
      */
-    this.tokensTimestamp = undefined;
-    if (tokens) {
-      if (tokensTimestamp) {
-        this.tokensTimestamp = tokensTimestamp
-      }
-      else if (typeof tokensPriority === 'number') {
-        // (can't use a truthy check because 0 is valid but falsy)
-        this.tokensTimestamp = new Date(tokensPriority).toISOString();
-      }
-      else {
-        this.tokensTimestamp = new Date(1).toISOString();
-      }
-    }
-    // else leave it undefined
-
+    this.tokensTimestamp = tokensTimestamp;
     /**
      * This is information that is included in requests to the PsiCash server, provided by
      * the app.
@@ -86,10 +63,10 @@ export class PsiCashParams {
     }
 
     // We'll be getting `tokens_timestamp` from the library via the URL, but storing
-    // `tokensPriority`, so we'll accept both.
-    let tokensTimestamp = obj.tokens_timestamp || obj.tokensTimestamp;
-    let { tokens, metadata, dev, debug, tokensPriority } = obj;
-    return new PsiCashParams(tokens, tokensTimestamp, metadata, dev, debug, tokensPriority);
+    // `tokensTimestamp`, so we'll accept both.
+    const tokensTimestamp = obj.tokens_timestamp || obj.tokensTimestamp;
+    const { tokens, metadata, dev, debug } = obj;
+    return new PsiCashParams(tokens, tokensTimestamp, metadata, dev, debug);
   }
 
   /**
@@ -102,21 +79,25 @@ export class PsiCashParams {
   }
 
   /**
-   * Compares a and b and returns the object that has the newest tokens (timestamp).
-   * Returns null if neither has valid tokens.
-   * @param {?PsiCashParams} a
-   * @param {?PsiCashParams} b
+   * Compares `urlParams` and `localParams` and returns the object that has the newest tokens.
+   * Comparing token timestamps is preferred, otherwise `urlParams` takes priority (as it's
+   * more likely to be new than the locally-stored params).
+   * Returns null if both are null.
+   * @param {?PsiCashParams} urlParams
+   * @param {?PsiCashParams} localParams
    * @returns {?PsiCashParams}
    */
-  static newest(a, b) {
-    if (!a || !a.tokensTimestamp) {
-      return b;
+  static newest(urlParams, localParams) {
+    if (!urlParams || !localParams) {
+      // May still return null
+      return urlParams || localParams;
     }
-    else if (!b || !b.tokensTimestamp) {
-      return a;
+    else if (!urlParams.tokensTimestamp || !localParams.tokensTimestamp) {
+      // Prefer localParams only if it has a timestamp and urlParams doesn't.
+      return localParams.tokensTimestamp ? localParams : urlParams;
     }
 
-    return (a.tokensTimestamp > b.tokensTimestamp) ? a : b;
+    return (urlParams.tokensTimestamp > localParams.tokensTimestamp) ? urlParams : localParams;
   }
 }
 

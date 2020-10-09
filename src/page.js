@@ -69,8 +69,8 @@ function getPsiCashParams() {
   const urlDebug = common.getURLParam(scriptURL_, common.DEBUG_URL_PARAM);
   const urlDev = common.getURLParam(scriptURL_, common.DEV_URL_PARAM);
 
-  // We'll look in the URL and in localStorage for the payload. We will prefer params with
-  // the most recent `tokensTimestamp`.
+  // We'll look in the URL and in localStorage for the payload, preferring the one with
+  // the newest tokens.
 
   let urlPayload = common.getURLParam(location.href, common.PSICASH_URL_PARAM);
 

@@ -71,8 +71,7 @@ function getIframePsiCashParams() {
   }
 
   // The widget passes PsiCashParams via the iframe URL, and we might have stored some
-  // from a previous request. Which tokens we use will depend on the timestamp of the
-  // tokens in the iframe URL.
+  // from a previous request. We will prefer the newest tokens.
 
   const urlPayload = common.getURLParam(location.href, common.PSICASH_URL_PARAM);
   const urlPsiCashParams = common.PsiCashParams.fromObject(JSON.parse(urlPayload));
