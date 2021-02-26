@@ -27,13 +27,6 @@ const IFRAME_URL_PATH = '/v2/iframe.html';
 const IFRAME_URL_PATH_DEBUG = '/v2/iframe.debug.html'; // DEBUG
 
 /**
- * The key under which data will be stored for the iframe (to get around
- * non-persistent iframe storage on Safari).
- * @const {string}
- */
-const IFRAME_STORAGE = 'iframeStorage';
-
-/**
  * The URL of this script.
  */
 const scriptURL_ = common.getCurrentScriptURL();
@@ -65,7 +58,7 @@ let psicashParams_;
  * @returns {!common.PsiCashParams}
  */
 function getPsiCashParams() {
-  // The URL for this script may dev and/or debug flags
+  // The URL for this script may have dev and/or debug flags
   const urlDebug = common.getURLParam(scriptURL_, common.DEBUG_URL_PARAM);
   const urlDev = common.getURLParam(scriptURL_, common.DEV_URL_PARAM);
 
@@ -102,7 +95,7 @@ function getPsiCashParams() {
   }
 
   // Side-effect: Store the params locally, if available and different.
-  if (finalPsiCashParams && !finalPsiCashParams.equal(localPsiCashParams)) {
+  if (!finalPsiCashParams.equal(localPsiCashParams)) {
     common.storageSet(common.PARAMS_STORAGE_KEY, finalPsiCashParams, useDevStorage);
   }
 
@@ -143,9 +136,8 @@ function loadIframe() {
 }
 
 /**
- * Callback for adding two numbers.
- *
- * @callback ActionCallback
+ * Callback for when an iframe message is done being processed.
+ * @callback ActionMessageCallback
  * @param {string} error
  * @param {boolean} success
  * @param {string} detail
@@ -153,7 +145,7 @@ function loadIframe() {
 
 /**
  * Callbacks waiting for PsiCash operations being processed by the iframe.
- * @type {Object.<string, ActionCallback>}
+ * @type {Object.<string, ActionMessageCallback>}
  */
 let pendingMessageCallbacks_ = {};
 
@@ -176,10 +168,6 @@ function processIframeMessage(eventData) {
     // We can now start passing on requests rather than queuing them up.
     setUpPsiCashTag();
   }
-  else if (msg.type === 'store') {
-    // In Safari, iframe's don't have persistent storage, so we'll store stuff for it.
-    common.storageSet(IFRAME_STORAGE, msg.data, psicashParams_.dev);
-  }
   else if (msg.type === psicash.Action.Init) {
     // Indicates that the request completed (successfully or not).
   }
@@ -201,7 +189,7 @@ function processIframeMessage(eventData) {
  * @param {!string} type The message type
  * @param {?number} timeout The time allowed for the message processing (not always applicable)
  * @param {?any} payload
- * @param {?ActionCallback} callback
+ * @param {?ActionMessageCallback} callback
  * @returns {!common.Message} The message object sent.
  */
 function sendMessageToIframe(type, timeout, payload, callback) {
@@ -210,7 +198,7 @@ function sendMessageToIframe(type, timeout, payload, callback) {
     return;
   }
 
-  const msg = new common.Message(type, timeout, payload, common.storageGet(IFRAME_STORAGE, psicashParams_.dev));
+  const msg = new common.Message(type, timeout, payload);
 
   if (callback) {
     pendingMessageCallbacks_[msg.id] = callback;
@@ -228,7 +216,7 @@ function sendMessageToIframe(type, timeout, payload, callback) {
  * Clear localStorage for page and/or iframe. Used when testing.
  * @param {boolean} page Clear page localStorage.
  * @param {boolean} iframe Clear iframe localStorage
- * @param {?ActionCallback} callback Callback to fire when clearing is complete.
+ * @param {?ActionMessageCallback} callback Callback to fire when clearing is complete.
  */
 function clearLocalStorage(page, iframe, callback) {
   if (page) {
@@ -264,7 +252,7 @@ function exposeToWindow(debugOnly, func, funcName) {
  * @public
  * @param {!psicash.Action} action The action to perform. Required.
  * @param {?Object} obj Optional.
- * @param {?ActionCallback} callback Optional.
+ * @param {?ActionMessageCallback} callback Optional.
  */
 function psicash(action, obj, callback) {
   if (!common.PsiCashActionValid(action)) {

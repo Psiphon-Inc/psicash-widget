@@ -1,6 +1,15 @@
 {
-  "debug": 0, "dev": 1,
-  "metadata":  {"v": 1, "user_agent": "Psiphon-PsiCash-Windows", "client_region": "CA", "client_version": "9999", "propagation_channel_id": "ABCD1234", "sponsor_id": "ABCD1234" },
-  "tokens": "ed9a5cbbb067640c17702bc7aa39f48826dbcbfbab3c68b20c85c86c06c04928", "tokens_timestamp": "2020-09-29T20:21:33.123Z",
+  "debug": 0,
+  "dev": 1,
+  "metadata": {
+    "v": 1,
+    "user_agent": "Psiphon-PsiCash-Windows",
+    "client_region": "CA",
+    "client_version": "9999",
+    "propagation_channel_id": "ABCD1234",
+    "sponsor_id": "ABCD1234"
+  },
+  "tokens": "token_tracker_earner_b9d96e423fc0214385ede0ef243891b8dfcec750bec671eb3a1455687b0d7492",
+  "timestamp": "2020-09-29T20:21:33.123Z",
   "v": 1
 }

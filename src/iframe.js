@@ -84,13 +84,6 @@ function getIframePsiCashParams() {
 
   const finalPsiCashParams = common.PsiCashParams.newest(urlPsiCashParams, localPsiCashParams) || new common.PsiCashParams();
 
-  // Ensure tokens are present at this point.
-  if (!finalPsiCashParams.tokens) {
-    globalFatalError_ = 'no tokens in PsiCashParams';
-    common.error(globalFatalError_);
-    return finalPsiCashParams;
-  }
-
   if (urlDebug !== null) {
     finalPsiCashParams.debug = urlDebug;
   }
@@ -98,8 +91,15 @@ function getIframePsiCashParams() {
     finalPsiCashParams.dev = urlDev;
   }
 
-  // Side-effect: Store the finalPsiCashParams locally.
-  common.storageSet(common.PARAMS_STORAGE_KEY, finalPsiCashParams, finalPsiCashParams.dev);
+  // If the final params are different from the ones we had stored locally, we're going
+  // to first clear anything else we had stored. This is because we could be a completely
+  // different user if the tokens are changing.
+  if (!localPsiCashParams || finalPsiCashParams.tokens !== localPsiCashParams.tokens) {
+    common.storageClear(finalPsiCashParams.dev);
+  }
+  if (!finalPsiCashParams.equal(localPsiCashParams)) {
+    common.storageSet(common.PARAMS_STORAGE_KEY, finalPsiCashParams, finalPsiCashParams.dev);
+  }
 
   return finalPsiCashParams;
 }
@@ -111,11 +111,7 @@ function getIframePsiCashParams() {
 function processPageMessage(eventData) {
   const msg = common.Message.fromJSON(eventData);
 
-  // The page will have sent us data that the iframe previously asked it to store.
-  // We will prefer our own locally-stored data, as it's fresher.
-  if (msg.storage) {
-    common.storageMerge(msg.storage, false, psicashParams_.dev);
-  }
+  common.log('page message:', msg.type, msg);
 
   if (msg.type === 'clear-localStorage') {
     localStorage.clear();
@@ -126,6 +122,13 @@ function processPageMessage(eventData) {
   if (globalFatalError_) {
     // Something unrecoverable has occurred. Do not try to proceed with a request.
     msg.error = globalFatalError_;
+    sendMessageToPage(msg);
+    return;
+  }
+
+  if (!psicashParams_.tokens) {
+    // We don't have valid tokens and cannot possibly proceed with a request.
+    msg.error = 'No tokens available';
     sendMessageToPage(msg);
     return;
   }
@@ -332,6 +335,15 @@ function makeTransactionRequest(msg, clazz, distinguisher, timeout, start=Date.n
       common.log('Request failed with 500; retrying', `dev-env:${!!psicashParams.dev}`);
       return recurse();
     }
+    else if (xhr.status === 401) {
+      // Our tokens are bad and we should nullify them. We will also clear all other
+      // storage (for example "next allowed" items) as we might have a logout.
+      psicashParams_.tokens = null;
+      common.storageClear(psicashParams_.dev);
+      common.storageSet(common.PARAMS_STORAGE_KEY, psicashParams_, psicashParams_.dev);
+
+      common.log('Request failed with 401', `dev-env:${!!psicashParams.dev}`);
+    }
     else if (xhr.status === 200) {
       common.log(`Successful ${clazz} reward for ${distinguisher}`, `dev-env:${!!psicashParams.dev}`);
 
@@ -342,10 +354,8 @@ function makeTransactionRequest(msg, clazz, distinguisher, timeout, start=Date.n
                           response.TransactionResponse.Values &&
                           response.TransactionResponse.Values.NextAllowed;
       if (nextAllowed) {
-        const storageKey = NEXTALLOWED_KEY + '::' + clazz + '::' + distinguisher;
+        const storageKey = `${NEXTALLOWED_KEY}::${clazz}::${distinguisher}`;
         common.storageSet(storageKey, nextAllowed, psicashParams.dev);
-        // Also set it into msg's storage property, to get the page to also store it
-        msg.storage = {storageKey: nextAllowed};
       }
     }
 
@@ -381,7 +391,9 @@ function makeTransactionRequest(msg, clazz, distinguisher, timeout, start=Date.n
   if (!document.referrer) {
     // The user has disabled referrers. We will never be able to validate a
     // distinguisher and basically can't proceed.
+    // Setting this prevents requests from being attempted later.
     globalFatalError_ = 'document.referrer is unavailable';
+    common.error(globalFatalError_);
   }
 
   psicashParams_ = getIframePsiCashParams();

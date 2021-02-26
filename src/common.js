@@ -32,15 +32,15 @@ export const DEV_URL_PARAM = 'dev';
  * between the page and iframe.
  */
 export class PsiCashParams {
-  constructor(tokens, tokensTimestamp, metadata, dev, debug) {
-    /** @type {string} */
-    this.tokens = tokens;
+  constructor(timestamp, tokens, metadata, dev, debug) {
     /**
-     * Timestamp of when the tokens were issued; used to prioritize which tokens should be used.
+     * Timestamp of when the package was created; used to prioritize which tokens should be used.
      * This will be undefined for params from older clients or stored previously.
      * @type {string}
      */
-    this.tokensTimestamp = tokensTimestamp;
+    this.timestamp = timestamp;
+    /** @type {string} */
+    this.tokens = tokens;
     /**
      * This is information that is included in requests to the PsiCash server, provided by
      * the app.
@@ -62,11 +62,8 @@ export class PsiCashParams {
       return null;
     }
 
-    // We'll be getting `tokens_timestamp` from the library via the URL, but storing
-    // `tokensTimestamp`, so we'll accept both.
-    const tokensTimestamp = obj.tokens_timestamp || obj.tokensTimestamp;
-    const { tokens, metadata, dev, debug } = obj;
-    return new PsiCashParams(tokens, tokensTimestamp, metadata, dev, debug);
+    const { timestamp, tokens, metadata, dev, debug } = obj;
+    return new PsiCashParams(timestamp, tokens, metadata, dev, debug);
   }
 
   /**
@@ -80,24 +77,48 @@ export class PsiCashParams {
 
   /**
    * Compares `urlParams` and `localParams` and returns the object that has the newest tokens.
-   * Comparing token timestamps is preferred, otherwise `urlParams` takes priority (as it's
+   * Comparing timestamps is preferred, otherwise `urlParams` takes priority (as it's
    * more likely to be new than the locally-stored params).
+   * Note that the value of `params.tokens` is _not_ checked; null tokens are treated the same as non-null.
    * Returns null if both are null.
-   * @param {?PsiCashParams} urlParams
+   * @param {?PsiCashParams} urlParams Will also be checked for timestamp validity (not too old or too new)
    * @param {?PsiCashParams} localParams
    * @returns {?PsiCashParams}
    */
   static newest(urlParams, localParams) {
+    // Before anything else, make sure urlParams is valid. To prevent stored-tokens-poisoning
+    // attacks (https://github.com/Psiphon-Inc/psiphon-issues/issues/555), we don't want
+    // to accept any URL params that have a timestamp too far in the past (because it
+    // should have just been generated, not a link in an email or something), nor in the
+    // future (we don't want bad tokens to get stored forever and never be flushed out by
+    // good tokens).
+    if (urlParams && urlParams.timestamp) {
+      const nowTimestamp = new Date().getTime();
+      const urlTimestamp = Date.parse(urlParams.timestamp);
+      if (urlTimestamp === window.NaN) {
+        log('URL params timestamp cannot be parsed')
+        return localParams;
+      }
+      if (urlTimestamp > nowTimestamp) {
+        log('URL params timestamp is in the future')
+        return localParams;
+      }
+      if ((nowTimestamp - urlTimestamp) > 2000) {
+        log('URL params timestamp is too old')
+        return localParams;
+      }
+    }
+
     if (!urlParams || !localParams) {
       // May still return null
       return urlParams || localParams;
     }
-    else if (!urlParams.tokensTimestamp || !localParams.tokensTimestamp) {
+    else if (!urlParams.timestamp || !localParams.timestamp) {
       // Prefer localParams only if it has a timestamp and urlParams doesn't.
-      return localParams.tokensTimestamp ? localParams : urlParams;
+      return localParams.timestamp ? localParams : urlParams;
     }
 
-    return (urlParams.tokensTimestamp > localParams.tokensTimestamp) ? urlParams : localParams;
+    return (urlParams.timestamp > localParams.timestamp) ? urlParams : localParams;
   }
 }
 
@@ -110,12 +131,11 @@ export class Message {
    * @param {string} type
    * @param {number} timeout
    * @param {any} payload
-   * @param {Object} storage
    * @param {string} error
    * @param {boolean} success
    * @param {string} detail
    */
-  constructor(type, timeout=null, payload=null, storage=null, error=null, success=true, detail='') {
+  constructor(type, timeout=null, payload=null, error=null, success=true, detail='') {
     /** @type {string} */
     this.id = String(Math.random());
     /** @type {string} */
@@ -127,8 +147,6 @@ export class Message {
     this.timeout = timeout;
     /** @type {any} */
     this.payload = payload;
-    /** @type {Object} */
-    this.storage = storage;
 
     /**
      * If this is set, an unrecoverable error has occurred.
@@ -172,7 +190,7 @@ export class Message {
       return null;
     }
     let j = JSON.parse(jsonString);
-    let m = new Message(j.type, j.timeout, j.payload, j.storage, j.error, j.success, j.detail);
+    let m = new Message(j.type, j.timeout, j.payload, j.error, j.success, j.detail);
     // The JSON will have its own id
     m.id = j.id;
     return m;
@@ -285,6 +303,26 @@ export function storageMerge(obj, preferObj, dev) {
     }
 
     storageSet(k, obj[k], dev);
+  }
+}
+
+/**
+ * Clears all data in local storage that belongs to us.
+ * @param {any} dev Truthy, indicates if this is using PsiCash-Dev rather than Prod.
+ */
+export function storageClear(dev) {
+  if (!localStorageOK()) {
+    return;
+  }
+
+  const keyPrefix = localStorageKey('', dev);
+
+  // Iterate backwards since we're deleting as we go
+  for (let i = window.localStorage.length - 1; i >= 0; i--) {
+    const key = window.localStorage.key(i);
+    if (key.startsWith(keyPrefix)) {
+      window.localStorage.removeItem(key);
+    }
   }
 }
 
@@ -416,6 +454,13 @@ export function inWidgetIframe() {
  * @returns {boolean}
  */
 export function inIframe() {
+  if (window.Cypress) {
+    // Cypress runs our page in an iframe, so we can't do the standard check. If someone
+    // is iframing one of our landing pages, they won't be able to set `Cypress` in our
+    // window object, so this check doesn't undermine our efforts.
+    return false;
+  }
+
   try {
     return window.self !== window.top;
   } catch (e) {

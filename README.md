@@ -141,8 +141,8 @@ The info passed in the `#!psicash=`/`?psicash=` PsiCash URL parameters is expose
 window._psicash.params()
 
 {
+  "timestamp": "2020-09-29T19:52:44Z",
   "tokens": "<tokens>",
-  "tokens_timestamp": "2020-09-29T19:52:44Z",
   "metadata": {
     "client_region": "CA",
     "client_version": "156",
@@ -151,7 +151,8 @@ window._psicash.params()
     "user_agent": "Psiphon-PsiCash-Windows",
     "v": 1
   },
-  "debug": "0"
+  "debug": "0",
+  "v": 1
 }
 ```
 

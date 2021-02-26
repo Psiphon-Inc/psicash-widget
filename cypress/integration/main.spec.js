@@ -18,6 +18,7 @@ before(function() {
   cy.fixture('params').as('psicashParams');
 });
 
+// We can't do anything if there are no tokens
 describe('no params (error)', function() {
   before(function() {
     // This is also sort of a test for the clearing function, so we're going to load some params first
@@ -28,16 +29,16 @@ describe('no params (error)', function() {
   });
 
   it('successfully loads', function() {
-    // beforeEach loaded page
+    // before() loaded page
   });
 
   it('has init error', function() {
-    cy.get('#init-error').should('contain', 'no tokens');
+    cy.get('#init-error').should('contain', 'No tokens');
   });
 
   it('gives errors for transaction attempts', function() {
-    cy.get('#page-view-error').should('contain', 'no tokens');
-    cy.get('#click-through-error').should('contain', 'no tokens');
+    cy.get('#page-view-error').should('contain', 'No tokens');
+    cy.get('#click-through-error').should('contain', 'No tokens');
   });
 
   it('gives errors for direct JS calls', function() {
@@ -46,7 +47,7 @@ describe('no params (error)', function() {
       return Cypress.Promise.map(allActions, (action) => {
         return new Cypress.Promise((resolve, reject) => {
           win.psicash(action, function(err, success) {
-            expect(err).to.contain('no tokens');
+            expect(err).to.contain('No tokens');
             resolve();
           });
         });
@@ -55,6 +56,7 @@ describe('no params (error)', function() {
   });
 });
 
+// Params that are no base64 encoded should work fine (backwards compatibility)
 describe('raw params (not base64)', function() {
   before(function() {
     // Clear the iframe's localStorage to get rid of params/tokens
@@ -74,6 +76,7 @@ describe('raw params (not base64)', function() {
   });
 });
 
+// The current standard form is to put our params in the hash, starting with an exclamation: `#!psicash=...`
 describe('base64 hashbang params', function() {
   before(function() {
     // Clear the iframe's localStorage to get rid of params/tokens
@@ -106,6 +109,7 @@ describe('base64 hashbang params', function() {
   });
 });
 
+// For backwards compatilbility, we also support the params in the hash without the exclamation
 describe('base64 hash params', function() {
   before(function() {
     // Clear the iframe's localStorage to get rid of params/tokens
@@ -125,6 +129,7 @@ describe('base64 hash params', function() {
   });
 });
 
+// If the hash is already in use, we put the params into the query
 describe('base64 query params', function() {
   before(function() {
     // Clear the iframe's localStorage to get rid of params/tokens
@@ -144,6 +149,9 @@ describe('base64 query params', function() {
   });
 });
 
+// Some browsers do no persist storage in 3rd party iframes (like ours). Our params will
+// still be persisted in the page storage, though, and will be supplied to the iframe even
+// if there are no params in the URL.
 describe('no iframe storage (like Safari)', function() {
   before(function() {
     // Load params into storage
@@ -179,6 +187,9 @@ describe('no iframe storage (like Safari)', function() {
   });
 });
 
+// If the iframe has stored params and a landing page is visited directly for the first
+// time (so no page-stored params) with no URL parameters, then the iframe-stored params
+// should be used successfully.
 describe('no page storage (like direct visit to new landing page)', function() {
   before(function() {
     // Load params into storage
@@ -195,7 +206,6 @@ describe('no page storage (like direct visit to new landing page)', function() {
   });
 
   it('should succeed for transactions', function() {
-
     // We're not going to check for "success" for these, as they may get 429, which is still fine.
     cy.get('#page-view-error').should('have.text', '(none)');
     cy.get('#click-through-error').should('have.text', '(none)');
@@ -215,6 +225,7 @@ describe('no page storage (like direct visit to new landing page)', function() {
   });
 });
 
+// Widget actions can be given an optional timeout value, which should be respected.
 describe('forced action timeouts', function() {
   before(function() {
     cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, this.psicashParams, true)).get('#init-done').should('have.text', 'DONE');
@@ -241,6 +252,8 @@ describe('forced action timeouts', function() {
   });
 });
 
+// The distinguisher passed to an earning request must be consistent with the domain+path
+// of the actual page we're requesting from.
 describe('distinguisher mismatch', function() {
   before(function() {
     cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, this.psicashParams, false)).get('#init-done').should('have.text', 'DONE');
@@ -258,7 +271,6 @@ describe('distinguisher mismatch', function() {
         });
       });
     });
-
   });
 });
 
