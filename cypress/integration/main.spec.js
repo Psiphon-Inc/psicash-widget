@@ -379,4 +379,60 @@ describe('token selection', function() {
       });
     });
   });
+
+  // Our old params package didn't have a timestamp
+  it('should handle params with empty timestamp', function() {
+    let olderTimestamp;
+
+    cy.log('Start with params with no timestamp');
+    let newestParams = JSON.parse(JSON.stringify(this.psicashParams));
+    newestParams.tokens = 'first';
+    newestParams.timestamp = undefined;
+    cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, newestParams, false));
+    cy.psiTestRequestSuccess(initAction);
+    cy.getIframeLocalStorage().then(function(iframeLS) {
+      expect(typeof iframeLS).to.equal('object');
+      expect(typeof iframeLS['PsiCash-Dev::v2::PsiCashParams']).to.equal('string');
+      const psicashParams = JSON.parse(iframeLS['PsiCash-Dev::v2::PsiCashParams']);
+      expect(psicashParams.tokens).to.not.be.null;
+      expect(psicashParams.tokens).to.equal('first');
+      expect(psicashParams.timestamp).to.be.undefined;
+
+      cy.log('Replace with params also with no timestamp');
+      newestParams.tokens = 'second';
+      newestParams.timestamp = undefined;
+      cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, newestParams, false));
+      cy.psiTestRequestSuccess(initAction);
+      cy.getIframeLocalStorage().then(function(iframeLS) {
+        const psicashParams = JSON.parse(iframeLS['PsiCash-Dev::v2::PsiCashParams']);
+        expect(psicashParams.tokens).to.not.be.null;
+        expect(psicashParams.tokens).to.equal('second');
+        expect(psicashParams.timestamp).to.be.undefined;
+
+        cy.log('Replace with params that have a timestamp');
+        newestParams.tokens = 'third';
+        cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, newestParams, true));
+        cy.psiTestRequestSuccess(initAction);
+        cy.getIframeLocalStorage().then(function(iframeLS) {
+          const psicashParams = JSON.parse(iframeLS['PsiCash-Dev::v2::PsiCashParams']);
+          expect(psicashParams.tokens).to.not.be.null;
+          expect(psicashParams.tokens).to.equal('third');
+          olderTimestamp = psicashParams.timestamp;
+
+          cy.log('Try to replace params-with-timestamp with params-without-timestamp');
+          newestParams.tokens = 'fourth';
+          newestParams.timestamp = undefined;
+          cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, newestParams, false));
+          cy.psiTestRequestSuccess(initAction);
+          cy.getIframeLocalStorage().then(function(iframeLS) {
+            const psicashParams = JSON.parse(iframeLS['PsiCash-Dev::v2::PsiCashParams']);
+            expect(psicashParams.tokens).to.not.be.null;
+            expect(psicashParams.tokens).to.equal('third');
+            expect(psicashParams.timestamp).to.equal(olderTimestamp);
+          });
+        });
+      });
+    });
+  });
+
 });
