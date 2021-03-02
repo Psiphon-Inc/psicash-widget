@@ -156,7 +156,7 @@ let pendingMessageCallbacks_ = {};
 function processIframeMessage(eventData) {
   const msg = JSON.parse(eventData);
 
-  common.log('iframe message:', msg.type, msg);
+  common.log('iframe message:', msg.type, JSON.stringify(msg));
 
   if (msg.error) {
     common.error(msg.error);
@@ -220,6 +220,7 @@ function sendMessageToIframe(type, timeout, payload, callback) {
  */
 function clearLocalStorage(page, iframe, callback) {
   if (page) {
+    common.log('page local storage clearing', window.localStorage.length, 'key(s)');
     window.localStorage.clear();
   }
 

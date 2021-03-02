@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en" debug="true">
+  <head>
+    <meta charset="utf-8">
+    <!-- prevent the favicon request -->
+    <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
+    <title>DEV: Landing Page with PsiCash</title>
+
+    <script async defer data-cfasync="false"
+      src="https://widget.psi.cash/v2/psicash.js?dev=1">
+    </script>
+    <script>
+      function psicash() {
+        psicash.queue = psicash.queue || [];
+        psicash.queue.push(arguments);
+      }
+    </script>
+  </head>
+  <body>
+    <h1>DEV: Page with PsiCash widget (no actions)</h1>
+  </body>
+</html>

@@ -111,10 +111,11 @@ function getIframePsiCashParams() {
 function processPageMessage(eventData) {
   const msg = common.Message.fromJSON(eventData);
 
-  common.log('page message:', msg.type, msg);
+  common.log('page message:', msg.type, JSON.stringify(msg));
 
   if (msg.type === 'clear-localStorage') {
-    localStorage.clear();
+    common.log('iframe local storage clearing', window.localStorage.length, 'key(s)');
+    window.localStorage.clear();
     sendMessageToPage(msg);
     return;
   }
@@ -128,7 +129,7 @@ function processPageMessage(eventData) {
 
   if (!psicashParams_.tokens) {
     // We don't have valid tokens and cannot possibly proceed with a request.
-    msg.error = 'No tokens available';
+    msg.error = 'no tokens available';
     sendMessageToPage(msg);
     return;
   }
@@ -144,7 +145,7 @@ function processPageMessage(eventData) {
   const distinguisher = getDistinguisher(msg);
   if (!validateDistinguisher(distinguisher)) {
     // The distinguisher is bad. We cannot proceed with a reward attempt.
-    msg.error = 'Distinguisher is invalid for this page: ' + distinguisher;
+    msg.error = 'distinguisher is invalid for this page: ' + distinguisher;
     sendMessageToPage(msg);
     return;
   }
@@ -175,6 +176,9 @@ function sendMessageToPage(msg) {
   }
 
   msg.error = msg.error || globalFatalError_ || null;
+  if (msg.error) {
+    msg.success = false;
+  }
 
   // Older IE has a limitation where only strings can be sent as the message, so we're
   // going to use JSON.

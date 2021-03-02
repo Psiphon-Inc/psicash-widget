@@ -14,5 +14,22 @@ declare namespace Cypress {
      * initially present, so a `psivisit()` should still be used after clearing.
      */
     clearLocalStorage(page: boolean, iframe: boolean): Chainable<JQuery<E>>
+
+    /**
+     * Make and test a PsiAction action request. Expect success.
+     * @param action Name of the PsiCash action type; like 'init', 'page-view', 'click-through'
+     * @param options Options to be passed to the request
+     * @param require200 If true, the response must be 200; otherwise 429 is allowed
+     */
+    psiTestRequestSuccess(action: string, options?: object, require200?: boolean): Chainable<JQuery<E>>
+
+    /**
+     * Make and test a PsiAction action request. Expect failure.
+     * @param action Name of the PsiCash action type; like 'init', 'page-view', 'click-through'
+     * @param expectedError The error message that is expected to result; may be null
+     * @param expectedDetail The detail message that is expected to result; optional
+     * @param options Options to be passed to the request; optional
+     */
+    psiTestRequestFailure(action: string, expectedError: string, expectedDetail?: string, options?: object): Chainable<JQuery<E>>
   }
 }

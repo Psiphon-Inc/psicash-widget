@@ -103,7 +103,13 @@ export class PsiCashParams {
         log('URL params timestamp is in the future')
         return localParams;
       }
-      if ((nowTimestamp - urlTimestamp) > 2000) {
+
+      // We need to give enough time for the app to send the URL to the browser (fast),
+      // the browser to load the page and start processing JS (slow), and the page to send
+      // load the iframe (slow-ish). If we don't give enough time for that, then the user
+      // can't do anything with their tokens. But if we leave _too much_ time, then an
+      // attacker has too big a window to poison a user's tokens.
+      if ((nowTimestamp - urlTimestamp) > 60000) {
         log('URL params timestamp is too old')
         return localParams;
       }
