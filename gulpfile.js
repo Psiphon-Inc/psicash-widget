@@ -96,6 +96,8 @@ function webserverPrep() {
   // To serve the landing pages and widget we need to rewrite some of the URLs in the files.
   return gulp.src([`${config.dist.base}/*/**`])
     .pipe(replace('https://widget.psi.cash', `http://localhost:${config.serve.widgetPort}`))
+    // Flip this flag when serving for testing
+    .pipe(replace('LOCAL_TESTING_BUILD = false', 'LOCAL_TESTING_BUILD = true'))
     .pipe(gulp.dest(`${config.serve.base}/${config.dist.base}`));
 }
 

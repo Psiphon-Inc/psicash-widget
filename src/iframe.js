@@ -113,10 +113,25 @@ function processPageMessage(eventData) {
 
   common.log('page message:', msg.type, JSON.stringify(msg));
 
-  if (msg.type === 'clear-localStorage') {
-    common.log('iframe local storage clearing', window.localStorage.length, 'key(s)');
-    window.localStorage.clear();
+  if (msg.type.startsWith('debug-localStorage')) {
+    if (!common.LOCAL_TESTING_BUILD) {
+      throw new Error('only allowed when testing');
+    }
+
+    switch (msg.type) {
+      case 'debug-localStorage::clear':
+        common.log('iframe local storage clearing', window.localStorage.length, 'key(s)');
+        window.localStorage.clear();
+        break;
+      case 'debug-localStorage::get':
+        msg.payload = window.localStorage;
+        break;
+      default:
+        throw new Error(`invalid localStorage command: ${msg.type}`);
+    }
+
     sendMessageToPage(msg);
+
     return;
   }
 

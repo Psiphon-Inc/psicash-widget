@@ -62,6 +62,21 @@ Cypress.Commands.add('clearLocalStorage', (page, iframe) => {
   });
 });
 
+Cypress.Commands.add('getIframeLocalStorage', () => {
+  cy.log('getIframeLocalStorage');
+  // Future: We might already have a page loaded, so consider not always doing this
+  cy.psivisit(helpers.url()).window().then(win => {
+    return new Cypress.Promise((resolve, reject) => {
+      win.psicash('init', (err, success, detail) => { // TODO: put in a const somewhere (deduplicate with the const in the spec)
+        // We don't care what the 'init' response is, just that it finished
+        win._psicash.getIframeLocalStorage((error, success, detail) => {
+          resolve(JSON.parse(detail));
+        });
+      });
+    });
+  });
+});
+
 Cypress.Commands.add('psiTestRequestSuccess', (action, options=undefined, require200=false) => {
   cy.log('psiTestRequestSuccess', action, options, require200);
 

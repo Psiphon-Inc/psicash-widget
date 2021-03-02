@@ -12,8 +12,16 @@ declare namespace Cypress {
      * Clear localStorage of the page and/or the iframe.
      * NOTE: This loads a fresh page, but this page will load with whatever storage was
      * initially present, so a `psivisit()` should still be used after clearing.
+     * @param page If true, the page's localStorage will be cleared
+     * @param iframe If true, the iframe's localStorage will be cleared
      */
     clearLocalStorage(page: boolean, iframe: boolean): Chainable<JQuery<E>>
+
+    /**
+     * Retrieve the contents of the iframe's localStorage.
+     * @returns {object}
+     */
+    getIframeLocalStorage(): Chainable<JQuery<E>>
 
     /**
      * Make and test a PsiAction action request. Expect success.

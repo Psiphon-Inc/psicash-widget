@@ -18,6 +18,14 @@
  */
 
 /**
+ * Indicates if we are currently operating in a local testing environment (i.e., Cypress).
+ * Used to expose functionality that should not be exposed in a production build. Set to
+ * true by gulp when serving locally.
+ * @const {boolean}
+ */
+export const LOCAL_TESTING_BUILD = false;
+
+/**
  * The query or hash param key for tokens, metadata, etc. passed by the app into the
  * landing page, and the page script into the iframe.
  * @const {string}
@@ -95,7 +103,7 @@ export class PsiCashParams {
     if (urlParams && urlParams.timestamp) {
       const nowTimestamp = new Date().getTime();
       const urlTimestamp = Date.parse(urlParams.timestamp);
-      if (urlTimestamp === window.NaN) {
+      if (isNaN(urlTimestamp)) {
         log('URL params timestamp cannot be parsed')
         return localParams;
       }
@@ -460,10 +468,8 @@ export function inWidgetIframe() {
  * @returns {boolean}
  */
 export function inIframe() {
-  if (window.Cypress) {
-    // Cypress runs our page in an iframe, so we can't do the standard check. If someone
-    // is iframing one of our landing pages, they won't be able to set `Cypress` in our
-    // window object, so this check doesn't undermine our efforts.
+  if (LOCAL_TESTING_BUILD) {
+    // Cypress runs our page in an iframe, so we can't do the standard check.
     return false;
   }
 

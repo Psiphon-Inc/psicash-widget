@@ -177,6 +177,9 @@ function processIframeMessage(eventData) {
   else if (msg.type === psicash.Action.ClickThrough) {
     // Indicates that the request completed (successfully or not).
   }
+  else if (msg.type === 'debug-localStorage::get') {
+    msg.detail = JSON.stringify(msg.payload);
+  }
 
   if (msg.id && pendingMessageCallbacks_[msg.id]) {
     pendingMessageCallbacks_[msg.id](msg.error, msg.success, msg.detail);
@@ -213,35 +216,13 @@ function sendMessageToIframe(type, timeout, payload, callback) {
 }
 
 /**
- * Clear localStorage for page and/or iframe. Used when testing.
- * @param {boolean} page Clear page localStorage.
- * @param {boolean} iframe Clear iframe localStorage
- * @param {?ActionMessageCallback} callback Callback to fire when clearing is complete.
- */
-function clearLocalStorage(page, iframe, callback) {
-  if (page) {
-    common.log('page local storage clearing', window.localStorage.length, 'key(s)');
-    window.localStorage.clear();
-  }
-
-  if (iframe) {
-    sendMessageToIframe('clear-localStorage', null, null, callback);
-  }
-  else {
-    // Ensure the callback is asynchronous.
-    setTimeout(callback, 1);
-  }
-}
-exposeToWindow(true, clearLocalStorage, 'clearLocalStorage');
-
-/**
  * Expose a function to the page, on `window._psicash`.
  * @param {boolean} debugOnly Only exposes the function if debug mode is detected.
  * @param {function} func
  * @param {string} funcName
  */
 function exposeToWindow(debugOnly, func, funcName) {
-  if (debugOnly && !window.Cypress) {
+  if (debugOnly && !common.LOCAL_TESTING_BUILD) {
     return;
   }
   window._psicash = window._psicash || {};
@@ -341,6 +322,8 @@ function setUpPsiCashTag() {
   // Widget-using pages sometimes need to access client platform and version in order to
   // decide what to show, etc. We'll expose a copy of our parameters -- the metadata
   // contains that info.
+  // NOTE: This is only exposing information that is already available to this page, just
+  // in a more accessible form.
   exposeToWindow(false, () => JSON.parse(JSON.stringify(psicashParams_)), 'params');
 
   // The iframe script will inform us when the next allowed reward is.
@@ -354,3 +337,44 @@ function setUpPsiCashTag() {
 
   loadIframe();
 })();
+
+/////////////////////
+// Testing-only code
+
+/**
+ * Clear localStorage for page and/or iframe. Used when testing.
+ * @param {boolean} page Clear page localStorage.
+ * @param {boolean} iframe Clear iframe localStorage
+ * @param {?ActionMessageCallback} callback Callback to fire when clearing is complete.
+ */
+function clearLocalStorage(page, iframe, callback) {
+  if (page) {
+    common.log('page local storage clearing', window.localStorage.length, 'key(s)');
+    window.localStorage.clear();
+  }
+
+  if (iframe) {
+    sendMessageToIframe('debug-localStorage::clear', null, null, callback);
+  }
+  else {
+    // Ensure the callback is asynchronous.
+    setTimeout(callback, 1);
+  }
+
+  // It's silly to call this with both params being false, but...
+  if (!page && !iframe) {
+    // Ensure the callback is asynchronous.
+    setTimeout(callback, 1);
+  }
+}
+exposeToWindow(true, clearLocalStorage, 'clearLocalStorage');
+
+/**
+ * Get a dump of the iframe's localStorage. Used when testing.
+ * @param {?ActionMessageCallback} callback Callback to fire when retrieval is complete.
+ *    The `detail` argument will be the JSON-encoded contents of localStorage.
+ */
+function getIframeLocalStorage(callback) {
+  sendMessageToIframe('debug-localStorage::get', null, null, callback);
+}
+exposeToWindow(true, getIframeLocalStorage, 'getIframeLocalStorage');

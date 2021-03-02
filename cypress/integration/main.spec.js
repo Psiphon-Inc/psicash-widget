@@ -172,3 +172,211 @@ describe('local nextAllowed limiting', function() {
     cy.psiTestRequestFailure(transActions[0], null, 'not yet allowed');
   });
 });
+
+// We will get a 401 response when our tokens are expired or logged-out
+describe('401 response', function() {
+  it('should nullify iframe local tokens', function() {
+    // Supply bad params/token to the page
+    let badTokensParams = JSON.parse(JSON.stringify(this.psicashParams));
+    badTokensParams.tokens = 'INVALID';
+    cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, badTokensParams));
+
+    // Init, but don't yet make a request
+    cy.psiTestRequestSuccess(initAction);
+
+    // Our bad token should have been saved
+    let timestamp;
+    cy.getIframeLocalStorage().then(function(iframeLS) {
+      expect(typeof iframeLS).to.equal('object');
+      expect(typeof iframeLS['PsiCash-Dev::v2::PsiCashParams']).to.equal('string');
+      const psicashParams = JSON.parse(iframeLS['PsiCash-Dev::v2::PsiCashParams']);
+      expect(psicashParams.tokens).to.not.be.null;
+      expect(psicashParams.tokens).to.equal('INVALID');
+      timestamp = psicashParams.timestamp;
+    });
+
+    // Now we try a request to the server with our bad token
+    cy.psiTestRequestFailure(transActions[0], null, '401');
+
+    // Getting that 401 should have nullified the token
+    cy.getIframeLocalStorage().then(function(iframeLS) {
+      expect(typeof iframeLS).to.equal('object');
+      expect(typeof iframeLS['PsiCash-Dev::v2::PsiCashParams']).to.equal('string');
+      const psicashParams = JSON.parse(iframeLS['PsiCash-Dev::v2::PsiCashParams']);
+      expect(psicashParams.tokens).to.be.null;
+
+      // The timestamp should not have changed
+      expect(psicashParams.timestamp).to.equal(timestamp)
+    });
+  });
+});
+
+// The logic for token selection is basically: pick the newest, unless it's too new or too old.
+// We will be checking for token selection based on what gets stored in the iframe localStorage.
+// NOTE: helpers.urlWithParams() updates the timestamp by default.
+describe('token selection', function() {
+  beforeEach(function() {
+    // Make sure we have nothing in localStorage yet
+    cy.getIframeLocalStorage().then(function(iframeLS) {
+      expect(typeof iframeLS).to.equal('object');
+      expect(typeof iframeLS['PsiCash-Dev::v2::PsiCashParams']).to.equal('string');
+      const psicashParams = JSON.parse(iframeLS['PsiCash-Dev::v2::PsiCashParams']);
+      expect(psicashParams.tokens).to.be.undefined;
+    });
+  });
+
+  it('should succeed when starting with nothing and given good params', function() {
+    cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, this.psicashParams));
+
+    cy.psiTestRequestSuccess(initAction);
+
+    cy.getIframeLocalStorage().then(function(iframeLS) {
+      expect(typeof iframeLS).to.equal('object');
+      expect(typeof iframeLS['PsiCash-Dev::v2::PsiCashParams']).to.equal('string');
+      const psicashParams = JSON.parse(iframeLS['PsiCash-Dev::v2::PsiCashParams']);
+      expect(psicashParams.tokens).to.not.be.null;
+      expect(psicashParams.tokens).to.contain('token_');
+    });
+  });
+
+  it('should succeed when starting with nothing and given null params', function() {
+    cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, this.psicashParams));
+
+    cy.psiTestRequestSuccess(initAction);
+
+    cy.getIframeLocalStorage().then(function(iframeLS) {
+      expect(typeof iframeLS).to.equal('object');
+      expect(typeof iframeLS['PsiCash-Dev::v2::PsiCashParams']).to.equal('string');
+      const psicashParams = JSON.parse(iframeLS['PsiCash-Dev::v2::PsiCashParams']);
+      expect(psicashParams.tokens).to.not.null;
+    });
+  });
+
+  it('should replace params with newer params', function() {
+    // TODO: Is there a way to do this without all the nesting?
+    // I tried fiddling with promises and couldn't get it to work.
+
+    let olderTimestamp;
+
+    cy.log('Start with good params');
+    let newestParams = JSON.parse(JSON.stringify(this.psicashParams));
+    newestParams.tokens = 'first';
+    cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, newestParams));
+    cy.psiTestRequestSuccess(initAction);
+    cy.getIframeLocalStorage().then(function(iframeLS) {
+      expect(typeof iframeLS).to.equal('object');
+      expect(typeof iframeLS['PsiCash-Dev::v2::PsiCashParams']).to.equal('string');
+      const psicashParams = JSON.parse(iframeLS['PsiCash-Dev::v2::PsiCashParams']);
+      expect(psicashParams.tokens).to.not.be.null;
+      expect(psicashParams.tokens).to.equal('first');
+      olderTimestamp = psicashParams.timestamp;
+
+      cy.log('Replace with newer params');
+      newestParams.tokens = 'second';
+      cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, newestParams, true, false))
+      cy.psiTestRequestSuccess(initAction);
+      cy.getIframeLocalStorage().then(function(iframeLS) {
+        const psicashParams = JSON.parse(iframeLS['PsiCash-Dev::v2::PsiCashParams']);
+        expect(psicashParams.tokens).to.not.be.null;
+        expect(psicashParams.tokens).to.equal('second');
+        expect(psicashParams.timestamp).to.not.equal(olderTimestamp);
+        olderTimestamp = psicashParams.timestamp;
+
+        cy.log('Replace with null tokens');
+        newestParams.tokens = null;
+        cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, newestParams, true, false))
+        cy.psiTestRequestFailure(initAction, 'no tokens');
+        cy.getIframeLocalStorage().then(function(iframeLS) {
+          const psicashParams = JSON.parse(iframeLS['PsiCash-Dev::v2::PsiCashParams']);
+          expect(psicashParams.tokens).to.be.null;
+          expect(psicashParams.timestamp).to.not.equal(olderTimestamp);
+          olderTimestamp = psicashParams.timestamp;
+
+          cy.log('Replace with even newer null tokens');
+          newestParams.tokens = null;
+          cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, newestParams, true, false))
+          cy.psiTestRequestFailure(initAction, 'no tokens');
+          cy.getIframeLocalStorage().then(function(iframeLS) {
+            const psicashParams = JSON.parse(iframeLS['PsiCash-Dev::v2::PsiCashParams']);
+            expect(psicashParams.tokens).to.be.null;
+            expect(psicashParams.timestamp).to.not.equal(olderTimestamp);
+            olderTimestamp = psicashParams.timestamp;
+
+            cy.log('Replace null tokens with non-null');
+            newestParams = JSON.parse(JSON.stringify(this.psicashParams));
+            newestParams.tokens = 'third';
+            cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, newestParams, true, false))
+            cy.psiTestRequestSuccess(initAction);
+            cy.getIframeLocalStorage().then(function(iframeLS) {
+              const psicashParams = JSON.parse(iframeLS['PsiCash-Dev::v2::PsiCashParams']);
+              expect(psicashParams.tokens).to.not.be.null;
+              expect(psicashParams.tokens).to.equal('third');
+              expect(psicashParams.timestamp).to.not.equal(olderTimestamp);
+              olderTimestamp = psicashParams.timestamp;
+            });
+          });
+        });
+      });
+    });
+  });
+
+  it('should reject params with bad timestamps', function() {
+    // TODO: Is there a way to do this without all the nesting?
+    // I tried fiddling with promises and couldn't get it to work.
+
+    let olderTimestamp;
+
+    cy.log('Start with good params');
+    let newestParams = JSON.parse(JSON.stringify(this.psicashParams));
+    newestParams.tokens = 'first';
+    cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, newestParams));
+    cy.psiTestRequestSuccess(initAction);
+    cy.getIframeLocalStorage().then(function(iframeLS) {
+      expect(typeof iframeLS).to.equal('object');
+      expect(typeof iframeLS['PsiCash-Dev::v2::PsiCashParams']).to.equal('string');
+      const psicashParams = JSON.parse(iframeLS['PsiCash-Dev::v2::PsiCashParams']);
+      expect(psicashParams.tokens).to.not.be.null;
+      expect(psicashParams.tokens).to.equal('first');
+      olderTimestamp = psicashParams.timestamp;
+
+      cy.log('Try to replace with params newer than now');
+      newestParams.tokens = 'second';
+      newestParams.timestamp = new Date(new Date().getTime() + 1e9).toISOString();
+      cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, newestParams, false, false))
+      cy.psiTestRequestSuccess(initAction);
+      cy.getIframeLocalStorage().then(function(iframeLS) {
+        const psicashParams = JSON.parse(iframeLS['PsiCash-Dev::v2::PsiCashParams']);
+        expect(psicashParams.tokens).to.not.be.null;
+        expect(psicashParams.tokens).to.equal('first'); // unchanged
+        expect(psicashParams.timestamp).to.equal(olderTimestamp); // unchanged
+        olderTimestamp = psicashParams.timestamp;
+
+        cy.log('Try to replace with params that are too old');
+        newestParams.tokens = 'third';
+        newestParams.timestamp = new Date(new Date().getTime() - 1e9).toISOString();
+        cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, newestParams, false, false))
+        cy.psiTestRequestSuccess(initAction);
+        cy.getIframeLocalStorage().then(function(iframeLS) {
+          const psicashParams = JSON.parse(iframeLS['PsiCash-Dev::v2::PsiCashParams']);
+          expect(psicashParams.tokens).to.not.be.null;
+          expect(psicashParams.tokens).to.equal('first'); // unchanged
+          expect(psicashParams.timestamp).to.equal(olderTimestamp); // unchanged
+          olderTimestamp = psicashParams.timestamp;
+
+          cy.log('Try to replace with params that have an unparsable timestamp');
+          newestParams.tokens = 'fourth';
+          newestParams.timestamp = 'NOT A TIMESTAMP';
+          cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, newestParams, false, false))
+          cy.psiTestRequestSuccess(initAction);
+          cy.getIframeLocalStorage().then(function(iframeLS) {
+            const psicashParams = JSON.parse(iframeLS['PsiCash-Dev::v2::PsiCashParams']);
+            expect(psicashParams.tokens).to.not.be.null;
+            expect(psicashParams.tokens).to.equal('first'); // unchanged
+            expect(psicashParams.timestamp).to.equal(olderTimestamp); // unchanged
+            olderTimestamp = psicashParams.timestamp;
+          });
+        });
+      });
+    });
+  });
+});
