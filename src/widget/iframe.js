@@ -17,14 +17,9 @@
  *
  */
 
-import * as common from './common.js';
-
-/**
- * The NewTransaction API server endpoint, including version number.
- * @const {string}
- */
-const PSICASH_TRANSACTION_URL = 'https://api.psi.cash/v1/transaction'; // PROD
-const PSICASH_TRANSACTION_URL_DEV = 'https://dev-api.psi.cash/v1/transaction'; // DEV
+import * as consts from '../consts.js';
+import * as utils from '../utils.js';
+import * as common from '../common.js';
 
 /**
  * Key used to store the next-allowed value in localStorage and pass it back to the
@@ -63,23 +58,23 @@ function getIframePsiCashParams() {
   // There are two URLs where the dev and debug flags could be set:
   // 1. The URL for iframe.html
   // 2. The URL for this script
-  const scriptURL = common.getCurrentScriptURL();
+  const scriptURL = utils.getCurrentScriptURL();
   let urlDebug = null, urlDev = null;
   for (let url of [location.href, scriptURL]) {
-    urlDebug = urlDebug || common.getURLParam(url, common.DEBUG_URL_PARAM);
-    urlDev = urlDev || common.getURLParam(url, common.DEV_URL_PARAM);
+    urlDebug = urlDebug || utils.getURLParam(url, common.DEBUG_URL_PARAM);
+    urlDev = urlDev || utils.getURLParam(url, common.DEV_URL_PARAM);
   }
 
   // The widget passes PsiCashParams via the iframe URL, and we might have stored some
   // from a previous request. We will prefer the newest tokens.
 
-  const urlPayload = common.getURLParam(location.href, common.PSICASH_URL_PARAM);
-  const urlPsiCashParams = common.PsiCashParams.fromObject(JSON.parse(urlPayload));
+  const urlPayload = utils.getURLParam(location.href, common.PSICASH_URL_PARAM);
+  const urlPsiCashParams = common.PsiCashParams.fromURLPayload(urlPayload);
 
   // Figure out if we should be looking in dev or prod storage for stored params
   const useDevStorage =  (urlDev !== null && urlDev) || (urlPsiCashParams && urlPsiCashParams.dev);
 
-  const localPayload = common.storageGet(common.PARAMS_STORAGE_KEY, useDevStorage);
+  const localPayload = utils.storageGet(consts.PARAMS_STORAGE_KEY, useDevStorage);
   const localPsiCashParams = common.PsiCashParams.fromObject(localPayload);
 
   const finalPsiCashParams = common.PsiCashParams.newest(urlPsiCashParams, localPsiCashParams) || new common.PsiCashParams();
@@ -95,10 +90,10 @@ function getIframePsiCashParams() {
   // to first clear anything else we had stored. This is because we could be a completely
   // different user if the tokens are changing.
   if (!localPsiCashParams || finalPsiCashParams.tokens !== localPsiCashParams.tokens) {
-    common.storageClear(finalPsiCashParams.dev);
+    utils.storageClear(finalPsiCashParams.dev);
   }
   if (!finalPsiCashParams.equal(localPsiCashParams)) {
-    common.storageSet(common.PARAMS_STORAGE_KEY, finalPsiCashParams, finalPsiCashParams.dev);
+    utils.storageSet(consts.PARAMS_STORAGE_KEY, finalPsiCashParams, finalPsiCashParams.dev);
   }
 
   return finalPsiCashParams;
@@ -111,23 +106,23 @@ function getIframePsiCashParams() {
 function processPageMessage(eventData) {
   const msg = common.Message.fromJSON(eventData);
 
-  common.log('page message:', msg.type, JSON.stringify(msg));
+  utils.log('page message:', msg.type, JSON.stringify(msg));
 
   if (msg.type.startsWith('debug-localStorage')) {
-    if (!common.LOCAL_TESTING_BUILD) {
+    if (!consts.LOCAL_TESTING_BUILD) {
       throw new Error('only allowed when testing');
     }
 
     switch (msg.type) {
-      case 'debug-localStorage::clear':
-        common.log('iframe local storage clearing', window.localStorage.length, 'key(s)');
-        window.localStorage.clear();
-        break;
-      case 'debug-localStorage::get':
-        msg.payload = window.localStorage;
-        break;
-      default:
-        throw new Error(`invalid localStorage command: ${msg.type}`);
+    case 'debug-localStorage::clear':
+      utils.log('iframe local storage clearing', window.localStorage.length, 'key(s)');
+      window.localStorage.clear();
+      break;
+    case 'debug-localStorage::get':
+      msg.payload = window.localStorage;
+      break;
+    default:
+      throw new Error(`invalid localStorage command: ${msg.type}`);
     }
 
     sendMessageToPage(msg);
@@ -176,7 +171,56 @@ function processPageMessage(eventData) {
     return;
   }
 
-  makeTransactionRequest(msg, clazz, distinguisher, msg.timeout);
+  const reqConfig = {
+    psicashParams: psicashParams_,
+    timeout: msg.timeout,
+    path: '/transaction',
+    method: 'POST',
+    queryParams: `class=${clazz}&distinguisher=${encodeURIComponent(distinguisher)}`,
+    callback: function reqCallback(result) {
+      if (result.error) {
+        // We failed all of our attempts and ran out of time.
+        // Let the page script know that we're done.
+        // We're not going to set msg.error, as this might be transient and recoverable.
+        msg.setSuccess(false, `request error: ${result.error}`);
+      }
+      else if (result.status === 401) {
+        // Our tokens are bad and we should nullify them. We will also clear all other
+        // storage (for example "next allowed" items) as we might have a logout.
+        psicashParams_.tokens = null;
+        utils.storageClear(psicashParams_.dev);
+        utils.storageSet(consts.PARAMS_STORAGE_KEY, psicashParams_, psicashParams_.dev);
+
+        utils.log('Request failed with 401', `dev-env:${!!psicashParams_.dev}`);
+        msg.setSuccess(false, '401 access denied');
+      }
+      else if (result.status === 200) {
+        utils.log(`Successful ${clazz} reward for ${distinguisher}`, `dev-env:${!!psicashParams_.dev}`);
+
+        // Store the NextAllowed datetime in the response to limit our future attempts.
+        const response = JSON.parse(result.body);
+        const nextAllowed = response &&
+                            response.TransactionResponse &&
+                            response.TransactionResponse.Values &&
+                            response.TransactionResponse.Values.NextAllowed;
+        if (nextAllowed) {
+          const storageKey = `${NEXTALLOWED_KEY}::${clazz}::${distinguisher}`;
+          utils.storageSet(storageKey, nextAllowed, psicashParams_.dev);
+        }
+
+        msg.setSuccess(true, String(result.status));
+      }
+      else {
+        // We got a status we didn't expect
+        msg.setSuccess(false, String(result.status));
+      }
+
+      // We're done, so let the page know.
+      sendMessageToPage(msg);
+    }
+  };
+
+  common.makePsiCashServerRequest(reqConfig);
 }
 
 /**
@@ -186,7 +230,7 @@ function processPageMessage(eventData) {
 function sendMessageToPage(msg) {
   if (!window.parent || !window.parent.postMessage) {
     // Nothing we can do.
-    common.error('Cannot post to page');
+    utils.error('Cannot post to page');
     return;
   }
 
@@ -258,7 +302,7 @@ function validateDistinguisher(distinguisher) {
  */
 function isRewardAllowed(clazz, distinguisher) {
   const storageKey = NEXTALLOWED_KEY + '::' + clazz + '::' + distinguisher;
-  let storedNextAllowed = common.storageGet(storageKey, psicashParams_.dev);
+  let storedNextAllowed = utils.storageGet(storageKey, psicashParams_.dev);
   let nextAllowed = storedNextAllowed ? new Date(storedNextAllowed) : null;
   if (!nextAllowed) {
     return true;
@@ -268,7 +312,7 @@ function isRewardAllowed(clazz, distinguisher) {
 
   const allowedNow = nextAllowed.getTime() < now.getTime();
   if (!allowedNow) {
-    common.log(`${clazz} reward not yet allowed; next allowed = ${nextAllowed}`, `dev-env:${!!psicashParams_.dev}`);
+    utils.log(`${clazz} reward not yet allowed; next allowed = ${nextAllowed}`, `dev-env:${!!psicashParams_.dev}`);
   }
 
   return allowedNow;
@@ -284,125 +328,12 @@ function getDistinguisher(msg) {
   if (msg.payload && msg.payload.distinguisher) {
     return msg.payload.distinguisher;
   }
-  return common.getHost(common.urlComponents(document.referrer));
-}
-
-/**
- * Make a transaction (i.e., reward) request to the PsiCash server.
- * `msg` will be modified to indicate success.
- * @param {common.Message} msg
- * @param {string} clazz The transaction class (like 'page-view')
- * @param {string} distinguisher The transaction distinguisher (like 'example.com')
- * @param {number} timeout The time allowed for this request (including retries).
- *                         Regardless of how short this is, we'll always make one attempt.
- * @param {number} start The start time for a series of request retries. Must only be set by recursive calls.
- * @param {number} attempt The count of the next attempt. Must only be set by recursive calls.
- * @param {common.PsiCashParams} psicashParams The params object to use and modify. Must only be set by recursive calls.
- */
-function makeTransactionRequest(msg, clazz, distinguisher, timeout, start=Date.now(), attempt=1, psicashParams=null) {
-  // We're going to interpret "no timeout" as 100s.
-  timeout = timeout || 100000;
-  const remainingTime = timeout - (Date.now() - start);
-
-  function recurse() {
-    if (remainingTime < 0) {
-      // We failed all of our attempts and ran out of time.
-      // Let the page script know that we're done.
-      // We're not going to set msg.error, as this might be transient and recoverable.
-      msg.setSuccess(false, 'request timeout');
-      sendMessageToPage(msg);
-      return;
-    }
-
-    // Wait 100ms and try again.
-    setTimeout(() => makeTransactionRequest(msg, clazz, distinguisher, timeout, start, attempt+1), 100);
-  }
-
-  if (!psicashParams) {
-    // Clone the global object, which we don't want to modify directly because it might be
-    // used by multiple concurrent requests.
-    psicashParams = JSON.parse(JSON.stringify(psicashParams_));
-  }
-
-  // We need the request metadata to exist to record the attempt count.
-  if (!psicashParams.metadata) {
-    psicashParams.metadata = {};
-  }
-  psicashParams.metadata.attempt = attempt;
-
-  // For logging and debugging purposes, record the referrer in the metadata, but _not_
-  // with any potentially-identifying query params or hash.
-  psicashParams.metadata.referrer = pageOrigin_ + common.urlComponents(document.referrer).pathname;
-
-  const psicashTransactionURL = psicashParams.dev ? PSICASH_TRANSACTION_URL_DEV : PSICASH_TRANSACTION_URL;
-  const reqURL = `${psicashTransactionURL}?class=${clazz}&distinguisher=${encodeURIComponent(distinguisher)}`;
-
-  let xhr = new(window.XMLHttpRequest || window.ActiveXObject)('MSXML2.XMLHTTP.3.0');
-  xhr.timeout = remainingTime;
-  xhr.open('POST', reqURL, true);
-  xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-  xhr.setRequestHeader('X-PsiCash-Auth', psicashParams.tokens);
-  xhr.setRequestHeader('X-PsiCash-Metadata', JSON.stringify(psicashParams.metadata));
-
-  xhr.onload = function xhrOnLoad() {
-    msg.setSuccess(xhr.status === 200, String(xhr.status));
-
-    common.log(msg, xhr.status, xhr.statusText, xhr.responseText, `dev-env:${!!psicashParams.dev}`);
-
-    if (xhr.status >= 500) {
-      // Retry
-      common.log('Request failed with 500; retrying', `dev-env:${!!psicashParams.dev}`);
-      return recurse();
-    }
-    else if (xhr.status === 401) {
-      // Our tokens are bad and we should nullify them. We will also clear all other
-      // storage (for example "next allowed" items) as we might have a logout.
-      psicashParams_.tokens = null;
-      common.storageClear(psicashParams_.dev);
-      common.storageSet(common.PARAMS_STORAGE_KEY, psicashParams_, psicashParams_.dev);
-
-      common.log('Request failed with 401', `dev-env:${!!psicashParams.dev}`);
-    }
-    else if (xhr.status === 200) {
-      common.log(`Successful ${clazz} reward for ${distinguisher}`, `dev-env:${!!psicashParams.dev}`);
-
-      // Store the NextAllowed datetime in the response to limit our future attempts.
-      const response = JSON.parse(xhr.responseText);
-      const nextAllowed = response &&
-                          response.TransactionResponse &&
-                          response.TransactionResponse.Values &&
-                          response.TransactionResponse.Values.NextAllowed;
-      if (nextAllowed) {
-        const storageKey = `${NEXTALLOWED_KEY}::${clazz}::${distinguisher}`;
-        common.storageSet(storageKey, nextAllowed, psicashParams.dev);
-      }
-    }
-
-    // We're done, so let the page know.
-    sendMessageToPage(msg);
-  };
-
-  xhr.onerror = function xhrOnError() {
-    // Retry
-    common.log('Request error; retrying', `dev-env:${!!psicashParams.dev}`);
-    msg.detail = 'request error';
-    return recurse();
-  };
-
-  xhr.ontimeout = function xhrOnTimeout() {
-    // Retry
-    common.log('Request timeout', `dev-env:${!!psicashParams.dev}`);
-    msg.detail = 'request timeout';
-    return recurse();
-  };
-
-  xhr.send(null);
-
+  return utils.getHost(utils.urlComponents(document.referrer));
 }
 
 // Initialize
 (function iframeInitialize() {
-  if (!common.inWidgetIframe()) {
+  if (!utils.inWidgetIframe()) {
     // Nothing for the iframe script to do
     return;
   }
@@ -412,13 +343,13 @@ function makeTransactionRequest(msg, clazz, distinguisher, timeout, start=Date.n
     // distinguisher and basically can't proceed.
     // Setting this prevents requests from being attempted later.
     globalFatalError_ = 'document.referrer is unavailable';
-    common.error(globalFatalError_);
+    utils.error(globalFatalError_);
   }
 
   psicashParams_ = getIframePsiCashParams();
 
   // Keep a global page origin, so we don't have to keep re-parsing it.
-  pageOrigin_ = common.getOrigin(common.urlComponents(document.referrer));
+  pageOrigin_ = utils.getOrigin(utils.urlComponents(document.referrer));
 
   window.addEventListener('message', function iframeMessageHandler(event) {
     // Make sure that only the parent page can communicate with us.

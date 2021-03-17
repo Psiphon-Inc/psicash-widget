@@ -17,7 +17,9 @@
  *
  */
 
-import * as common from './common.js';
+import * as consts from '../consts.js';
+import * as utils from '../utils.js';
+import * as common from '../common.js';
 
 /**
  * The URL of the widget iframe.
@@ -29,13 +31,13 @@ const IFRAME_URL_PATH_DEBUG = '/v2/iframe.debug.html'; // DEBUG
 /**
  * The URL of this script.
  */
-const scriptURL_ = common.getCurrentScriptURL();
+const scriptURL_ = utils.getCurrentScriptURL();
 
 /**
  * The origin of the widget. This is used to ensure that messages received are coming
  * from the right place.
  */
-const widgetOrigin_ = common.getOrigin(common.urlComponents(scriptURL_));
+const widgetOrigin_ = utils.getOrigin(utils.urlComponents(scriptURL_));
 
 /**
  * The PsiCash widget iframe element. Will bet set when the iframe is created.
@@ -59,30 +61,18 @@ let psicashParams_;
  */
 function getPsiCashParams() {
   // The URL for this script may have dev and/or debug flags
-  const urlDebug = common.getURLParam(scriptURL_, common.DEBUG_URL_PARAM);
-  const urlDev = common.getURLParam(scriptURL_, common.DEV_URL_PARAM);
+  const urlDebug = utils.getURLParam(scriptURL_, common.DEBUG_URL_PARAM);
+  const urlDev = utils.getURLParam(scriptURL_, common.DEV_URL_PARAM);
 
   // We'll look in the URL and in localStorage for the payload, preferring the one with
   // the newest tokens.
 
-  let urlPayload = common.getURLParam(location.href, common.PSICASH_URL_PARAM);
-
-  // The params payload is transferred as URL-encoded JSON (possibly base64).
-  try {
-    if (urlPayload) {
-      urlPayload = window.atob(urlPayload);
-    }
-  }
-  catch (error) {
-    // Do nothing -- not base64
-  }
-
-  urlPayload = JSON.parse(urlPayload);
-  const urlPsiCashParams = common.PsiCashParams.fromObject(urlPayload);
+  const urlPayload = utils.getURLParam(location.href, common.PSICASH_URL_PARAM);
+  const urlPsiCashParams = common.PsiCashParams.fromURLPayload(urlPayload);
 
   // Figure out if we should be looking in dev or prod storage for stored params
   const useDevStorage =  (urlDev !== null && urlDev) || (urlPsiCashParams && urlPsiCashParams.dev);
-  const localPayload = common.storageGet(common.PARAMS_STORAGE_KEY, useDevStorage);
+  const localPayload = utils.storageGet(consts.PARAMS_STORAGE_KEY, useDevStorage);
   const localPsiCashParams = common.PsiCashParams.fromObject(localPayload);
 
   const finalPsiCashParams = common.PsiCashParams.newest(urlPsiCashParams, localPsiCashParams) || new common.PsiCashParams();
@@ -96,7 +86,7 @@ function getPsiCashParams() {
 
   // Side-effect: Store the params locally, if available and different.
   if (!finalPsiCashParams.equal(localPsiCashParams)) {
-    common.storageSet(common.PARAMS_STORAGE_KEY, finalPsiCashParams, useDevStorage);
+    utils.storageSet(consts.PARAMS_STORAGE_KEY, finalPsiCashParams, useDevStorage);
   }
 
   return finalPsiCashParams;
@@ -107,7 +97,7 @@ function getPsiCashParams() {
  */
 function loadIframe() {
   const iframeURLPath = psicashParams_.debug ? IFRAME_URL_PATH_DEBUG : IFRAME_URL_PATH;
-  const paramsString = encodeURIComponent(JSON.stringify(psicashParams_));
+  const paramsString = psicashParams_.encode();
   let iframeSrc = `${widgetOrigin_}${iframeURLPath}#!`;
   iframeSrc += `${common.PSICASH_URL_PARAM}=${paramsString}`;
   if (psicashParams_.dev !== null && psicashParams_.dev !== undefined) {
@@ -151,15 +141,15 @@ let pendingMessageCallbacks_ = {};
 
 /**
  * Does necessary processing on a message received from the iframe.
- * @param {object} eventData
+ * @param {Object} eventData
  */
 function processIframeMessage(eventData) {
   const msg = JSON.parse(eventData);
 
-  common.log('iframe message:', msg.type, JSON.stringify(msg));
+  utils.log('iframe message:', msg.type, JSON.stringify(msg));
 
   if (msg.error) {
-    common.error(msg.error);
+    utils.error(msg.error);
   }
 
   // NOTE: Don't return early from these cases unless you're certain there can't
@@ -222,7 +212,7 @@ function sendMessageToIframe(type, timeout, payload, callback) {
  * @param {string} funcName
  */
 function exposeToWindow(debugOnly, func, funcName) {
-  if (debugOnly && !common.LOCAL_TESTING_BUILD) {
+  if (debugOnly && !consts.LOCAL_TESTING_BUILD) {
     return;
   }
   window._psicash = window._psicash || {};
@@ -263,7 +253,7 @@ function psicash(action, obj, callback) {
       // We can determine if the callback should be called if it's still in
       // pendingMessageCallbacks_.
       if (msg.id && pendingMessageCallbacks_[msg.id]) {
-        common.log('action timed out: ' + action);
+        utils.log('action timed out: ' + action);
         // The callback has NOT already been called.
         pendingMessageCallbacks_[msg.id](null, false, 'timeout');
         // Delete the callback so it isn't called again.
@@ -286,7 +276,7 @@ psicash.Action = common.PsiCashAction;
  */
 function setUpPsiCashTag() {
   if (!window.psicash) {
-    common.error('Improperly configured; window.psicash must be present; see usage instructions');
+    utils.error('Improperly configured; window.psicash must be present; see usage instructions');
     return;
   }
 
@@ -305,7 +295,7 @@ function setUpPsiCashTag() {
 
 // Do the work.
 (function pageInitialize() {
-  if (common.inWidgetIframe()) {
+  if (utils.inWidgetIframe()) {
     // Nothing for the page script to do
     return;
   }
@@ -313,7 +303,7 @@ function setUpPsiCashTag() {
   // Disallow this widget from being loaded into an iframe. This isn't a restriction of
   // the widget so much as a mitigation against an earning attack that iframes our landing
   // pages. See: https://github.com/Psiphon-Inc/psiphon-issues/issues/554
-  if (common.inIframe()) {
+  if (utils.inIframe()) {
     throw new Error('The widget must not be put in an iframe');
   }
 
@@ -349,7 +339,7 @@ function setUpPsiCashTag() {
  */
 function clearLocalStorage(page, iframe, callback) {
   if (page) {
-    common.log('page local storage clearing', window.localStorage.length, 'key(s)');
+    utils.log('page local storage clearing', window.localStorage.length, 'key(s)');
     window.localStorage.clear();
   }
 

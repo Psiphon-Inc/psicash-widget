@@ -1,6 +1,12 @@
 # PsiCash Widget
 
-## Setup
+This repo includes code for the PsiCash "widget" (embedded on landing pages to earn PsiCash) and our Shopify store. (They are both here because they are similar and share a lot of code.)
+
+## Widget
+
+Source is in [`./src/widget`](https://github.com/Psiphon-Inc/psicash-widget/tree/master/src/widget).
+
+### Setup
 
 Probably check this out when installing Gulp: https://gulpjs.com/docs/en/getting-started/quick-start
 
@@ -9,7 +15,7 @@ $ npm install --global gulp-cli
 $ npm install
 ```
 
-## Building and Testing
+### Building and Testing
 
 Build:
 ```
@@ -46,9 +52,9 @@ In order for the transactions to succeed, there will need to be a `transaction_t
 
 You will also have to modify the API server config to indicate the localhost origin for the widget requests. In `config_override.toml`, in the `[cors]` section, add a setting like `widget_origins = ["http://localhost:44444"]`. Restart the server.
 
-## How it works
+### How it works
 
-### App opens landing page
+#### App opens landing page
 
 The app will open the landing page, passing the earner token to it via a hash param:
 
@@ -64,7 +70,7 @@ https://psip.me/?psicash=<payload>
 
 In either case, it may be appended to pre-existing params with `...&psicash=<tokens>`.
 
-### Embedding the PsiCash widget
+#### Embedding the PsiCash widget
 
 ```html
 <script async defer data-cfasync="false"
@@ -113,7 +119,7 @@ Possible action types:
 Callbacks are passed `(error, success)`. `error` indicates a hard, probably unrecoverable failure (such as an absence of tokens). `success` indicates that the action was successful; if false it may indicate a soft failure, such as a reward-rate-limiting 429 response. If `error` is non-null, `success` is meaningless.
 
 
-#### `<script>` tag attributes
+##### `<script>` tag attributes
 
 Both `async` and `defer` are included [because](https://html.spec.whatwg.org/multipage/scripting.html):
 > The `defer` attribute may be specified even if the `async` attribute is specified, to cause legacy Web browsers that only support `defer` (and not `async`) to fall back to the `defer` behavior instead of the blocking behavior that is the default.
@@ -121,7 +127,7 @@ Both `async` and `defer` are included [because](https://html.spec.whatwg.org/mul
 `data-cfasync="false"` is used to [disable](https://support.cloudflare.com/hc/en-us/articles/200169436--How-can-I-have-Rocket-Loader-ignore-my-script-s-in-Automatic-Mode-) Cloudflare's use of Rocket Loader on the script. We have observed the script failing to be loaded by Rocket Loader, which is [apparently not uncommon](https://support.cloudflare.com/hc/en-us/articles/200169456-Why-is-JavaScript-or-jQuery-not-working-on-my-site-).
 
 
-### PsiCash script loads widget
+#### PsiCash script loads widget
 
 `psicash.js` creates an invisible iframe in the page like so:
 
@@ -133,7 +139,7 @@ Both `async` and `defer` are included [because](https://html.spec.whatwg.org/mul
 
 The code in that iframe performs the requested transactions with the PsiCash server.
 
-### Accessing the PsiCash parameters
+#### Accessing the PsiCash parameters
 
 The info passed in the `#!psicash=`/`?psicash=` PsiCash URL parameters is exposed to the web page. This can be useful when trying to determine the platform and version of the client app. The info can be accessed like so:
 
@@ -155,6 +161,10 @@ window._psicash.params()
   "v": 1
 }
 ```
+
+## Shopify
+
+Source is in [`./src/shopify`](https://github.com/Psiphon-Inc/psicash-widget/tree/master/src/shopify). There is a separate README in that directory.
 
 ## License
 

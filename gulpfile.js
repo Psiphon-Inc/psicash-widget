@@ -21,7 +21,7 @@ var awspublish = require('gulp-awspublish');
 let config = {
   version: 'v2',
   src: {
-    widget: 'src',
+    widget: 'src/widget',
     landing: 'landing'
   },
   dist: {
@@ -31,7 +31,7 @@ let config = {
     get landing() { return `${config.dist.base}/landing`; }
   },
   js: {
-    entryPoints: ['src/iframe.js', 'src/page.js'],
+    entryPoints: ['src/widget/iframe.js', 'src/widget/page.js'],
     outputFile: 'psicash.js',
   },
   copy: {
@@ -152,6 +152,30 @@ function s3Upload() {
     .pipe(awspublish.reporter());
 }
 
+function shopify() {
+  // All our steps and config are in this funciton, for coding expediency.
+  // We should clean this up at some point.
+
+  // set up the browserify instance on a task basis
+  let b = browserify({
+    entries: ['src/shopify/shopify.js'],
+    debug: true})
+    .transform(babelify, { presets : [ '@babel/env' ], plugins: [ '@babel/plugin-proposal-class-properties' ] });
+
+  return b.bundle()
+    .pipe(source('psicash-shopify.js'))
+    .pipe(gulp.dest('dist/shopify'))
+    //* disable uglification
+    .pipe(buffer())
+    .pipe(sourcemaps.init({loadMaps: true}))
+    // Add transformation tasks to the pipeline here.
+    .pipe(uglify())
+    .on('error', log.error)
+    .pipe(sourcemaps.write('./'))
+    .pipe(gulp.dest('dist/shopify'));
+    //*/
+}
+
 let fullBuild = gulp.series(javascript, uglification, dist, gitInfo);
 let serveBuild = gulp.series(javascript, dist, discardSourceMap, webserverPrep);
 
@@ -162,4 +186,5 @@ function watch() {
 exports.clean = clean;
 exports.build = gulp.series(clean, fullBuild);
 exports.serve = gulp.series(clean, serveBuild, webserver, watch);
+exports.shopify = gulp.series(shopify);
 exports.deploy = s3Upload;

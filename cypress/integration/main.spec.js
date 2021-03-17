@@ -102,7 +102,7 @@ describe('no iframe storage (like Safari)', function() {
 describe('no page storage (like direct visit to new landing page)', function() {
   it('should succeed', function() {
     // Load params into storage
-    cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, this.psicashParams))
+    cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, this.psicashParams));
     // Clear page storage.
     cy.clearLocalStorage(true, false);
     // Visit with no params/tokens in URL
@@ -169,7 +169,7 @@ describe('local nextAllowed limiting', function() {
     // First one succeeds
     cy.psiTestRequestSuccess(transActions[0], null, /*require200=*/true);
 
-    cy.psiTestRequestFailure(transActions[0], null, 'not yet allowed');
+    cy.psiTestRequestFailure(transActions[0], null, '429');
   });
 });
 
@@ -206,7 +206,7 @@ describe('401 response', function() {
       expect(psicashParams.tokens).to.be.null;
 
       // The timestamp should not have changed
-      expect(psicashParams.timestamp).to.equal(timestamp)
+      expect(psicashParams.timestamp).to.equal(timestamp);
     });
   });
 });
@@ -273,7 +273,7 @@ describe('token selection', function() {
 
       cy.log('Replace with newer params');
       newestParams.tokens = 'second';
-      cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, newestParams, true, false))
+      cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, newestParams, true, false));
       cy.psiTestRequestSuccess(initAction);
       cy.getIframeLocalStorage().then(function(iframeLS) {
         const psicashParams = JSON.parse(iframeLS['PsiCash-Dev::v2::PsiCashParams']);
@@ -284,7 +284,7 @@ describe('token selection', function() {
 
         cy.log('Replace with null tokens');
         newestParams.tokens = null;
-        cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, newestParams, true, false))
+        cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, newestParams, true, false));
         cy.psiTestRequestFailure(initAction, 'no tokens');
         cy.getIframeLocalStorage().then(function(iframeLS) {
           const psicashParams = JSON.parse(iframeLS['PsiCash-Dev::v2::PsiCashParams']);
@@ -294,7 +294,7 @@ describe('token selection', function() {
 
           cy.log('Replace with even newer null tokens');
           newestParams.tokens = null;
-          cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, newestParams, true, false))
+          cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, newestParams, true, false));
           cy.psiTestRequestFailure(initAction, 'no tokens');
           cy.getIframeLocalStorage().then(function(iframeLS) {
             const psicashParams = JSON.parse(iframeLS['PsiCash-Dev::v2::PsiCashParams']);
@@ -305,7 +305,7 @@ describe('token selection', function() {
             cy.log('Replace null tokens with non-null');
             newestParams = JSON.parse(JSON.stringify(this.psicashParams));
             newestParams.tokens = 'third';
-            cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, newestParams, true, false))
+            cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, newestParams, true, false));
             cy.psiTestRequestSuccess(initAction);
             cy.getIframeLocalStorage().then(function(iframeLS) {
               const psicashParams = JSON.parse(iframeLS['PsiCash-Dev::v2::PsiCashParams']);
@@ -342,7 +342,7 @@ describe('token selection', function() {
       cy.log('Try to replace with params newer than now');
       newestParams.tokens = 'second';
       newestParams.timestamp = new Date(new Date().getTime() + 1e9).toISOString();
-      cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, newestParams, false, false))
+      cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, newestParams, false, false));
       cy.psiTestRequestSuccess(initAction);
       cy.getIframeLocalStorage().then(function(iframeLS) {
         const psicashParams = JSON.parse(iframeLS['PsiCash-Dev::v2::PsiCashParams']);
@@ -354,7 +354,7 @@ describe('token selection', function() {
         cy.log('Try to replace with params that are too old');
         newestParams.tokens = 'third';
         newestParams.timestamp = new Date(new Date().getTime() - 1e9).toISOString();
-        cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, newestParams, false, false))
+        cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, newestParams, false, false));
         cy.psiTestRequestSuccess(initAction);
         cy.getIframeLocalStorage().then(function(iframeLS) {
           const psicashParams = JSON.parse(iframeLS['PsiCash-Dev::v2::PsiCashParams']);
@@ -366,7 +366,7 @@ describe('token selection', function() {
           cy.log('Try to replace with params that have an unparsable timestamp');
           newestParams.tokens = 'fourth';
           newestParams.timestamp = 'NOT A TIMESTAMP';
-          cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, newestParams, false, false))
+          cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, newestParams, false, false));
           cy.psiTestRequestSuccess(initAction);
           cy.getIframeLocalStorage().then(function(iframeLS) {
             const psicashParams = JSON.parse(iframeLS['PsiCash-Dev::v2::PsiCashParams']);

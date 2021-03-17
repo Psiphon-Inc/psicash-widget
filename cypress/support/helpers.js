@@ -4,7 +4,7 @@ export function url(suffix='') {
 
 /**
  * Encode the given params, suitable for use in a URL.
- * @param {object} params The PsiCash params object.
+ * @param {Object} params The PsiCash params object.
  * @param {boolean} base64 Whether the params should be base64-encoded.
  */
 export function encodeParams(params, base64) {
@@ -28,7 +28,7 @@ export const ParamsPrefixes = {
 /**
  * Created a full URL with the given params.
  * @param {ParamsPrefixes} prefix The hash or query prefix immediately before the params.
- * @param {object} params The PsiCash params object.
+ * @param {Object} params The PsiCash params object.
  * @param {boolean} updateTimestamp If true, the timestamp of the params will be set to "now".
  * @param {boolean} base64 Whether the params should be base64-encoded.
  */

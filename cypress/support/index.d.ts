@@ -19,7 +19,7 @@ declare namespace Cypress {
 
     /**
      * Retrieve the contents of the iframe's localStorage.
-     * @returns {object}
+     * @returns {Object}
      */
     getIframeLocalStorage(): Chainable<JQuery<E>>
 
