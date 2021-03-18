@@ -172,8 +172,7 @@ function shopify() {
     .pipe(uglify())
     .on('error', log.error)
     .pipe(sourcemaps.write('./'))
-    .pipe(gulp.dest('dist/shopify'));
-    //*/
+    .pipe(gulp.dest('dist/shopify'));//*/
 }
 
 let fullBuild = gulp.series(javascript, uglification, dist, gitInfo);

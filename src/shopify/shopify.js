@@ -138,12 +138,26 @@ function validatePsiCashParams(psicashParams, callback) {
  * @param {!common.PsiCashParams} psicashParams
  */
 function addPsiCashParamsToLinks(ourOrigin, psicashParams) {
-  const links = document.querySelectorAll('a');
-  for (let i = 0; i < links.length; i++) {
-    let linkURL = utils.urlComponents(links[i].href);
+  // Note: We are only processing `<a>` elements. modifyLink will filter for this, while
+  // other code will look for anything with an `href` property. This is a tiny bit
+  // inefficient, but allows us to have a single point of deciding.
+
+  const modifyLink = function(elem) {
+    if (!elem || elem.nodeName.toLowerCase() !== 'a') {
+      // Sanity check to make sure we have a valid link (anchor) element
+      return;
+    }
+
+    if (elem.href.indexOf(`${common.PSICASH_URL_PARAM}=`) >= 0) {
+      // Make sure we don't change an already modified link
+      return;
+    }
+
+    let linkURL = utils.urlComponents(elem.href);
     const linkOrigin = utils.getOrigin(linkURL);
     if (linkOrigin !== ourOrigin) {
-      continue;
+      // Only modify internal links
+      return;
     }
 
     if (!linkURL.hash) {
@@ -156,8 +170,53 @@ function addPsiCashParamsToLinks(ourOrigin, psicashParams) {
       linkURL.search = `${common.PSICASH_URL_PARAM}=${psicashParams.encode()}`;
     }
 
-    links[i].href = linkURL.href;
+    elem.href = linkURL.href;
+  };
+
+  // Modify links already present in the page
+  const links = document.querySelectorAll('[href]');
+  for (let i = 0; i < links.length; i++) {
+    modifyLink(links[i]);
   }
+
+  // Watch for changes to the page to make sure we modify any new or updated links
+  const mutationObserver = new MutationObserver(function mutationObserverCallback(mutationsList, observer) {
+    for (let i = 0; i < mutationsList.length; i++) {
+      const mutation = mutationsList[i];
+      if (mutation.type === 'childList') {
+        // Note that an added node might include a whole subtree (including links) -- we
+        // don't get separate elements in the addedNodes list for each subtree member.
+        // So we need to look at the nodes themself, and any children they might have.
+        for (let j = 0; j < mutation.addedNodes.length; j++) {
+          const addedNode = mutation.addedNodes[j];
+          if (addedNode.nodeType !== Node.ELEMENT_NODE) {
+            continue;
+          }
+
+          // addedNode is of type Node, so we're checking for (and using) Element
+          // properties by string to avoid linter warnings. (This looks dirty but is okay.)
+          if (addedNode['href']) {
+            modifyLink(addedNode);
+          }
+
+          if (addedNode['querySelectorAll']) {
+            const addedNodeChildLinks = addedNode['querySelectorAll']('[href]');
+            for (let k = 0; k < addedNodeChildLinks.length; k++) {
+              modifyLink(addedNodeChildLinks[k]);
+            }
+          }
+        }
+      }
+      else if (mutation.type === 'attributes') {
+        modifyLink(mutation.target);
+      }
+    }
+  });
+  mutationObserver.observe(document.body, {
+    subtree: true,
+    childList: true,
+    attributeFilter: ['href']
+  });
 }
 
 /**
