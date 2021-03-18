@@ -231,11 +231,11 @@ function showBlockingMessage(error, msg) {
   const ourOrigin = utils.getOrigin(utils.urlComponents(location.href)); // this is more widely supported than location.origin
   const referrerOrigin = document.referrer && utils.getOrigin(utils.urlComponents(document.referrer));
   if (referrerOrigin !== ourOrigin) {
-    // This site must be loaded directly from our app, so we require the referrer to be empty.
+    // This site must be launched directly from our app, so we require the referrer to be empty.
     // This helps prevent token poisoning.
     // (This check can be circumvented by browser settings, etc., but we should still check it.)
     if (referrerOrigin) {
-      showBlockingMessage(true, 'This site must be loaded directly from the Psiphon app.');
+      showBlockingMessage(true, 'This site must be launched directly from the Psiphon app.');
       throw new Error(`PsiCash: Bad referrer; must be empty or "${ourOrigin}"; got "${referrerOrigin}"`);
     }
 
@@ -245,7 +245,7 @@ function showBlockingMessage(error, msg) {
     const urlParams = common.PsiCashParams.fromURLPayload(utils.getURLParam(location.href, common.PSICASH_URL_PARAM));
     if (!urlParams) {
       // Either the URL param is missing, or the couldn't be parsed.
-      showBlockingMessage(true, 'This site must be loaded directly from the Psiphon app.');
+      showBlockingMessage(true, 'This site must be launched directly from the Psiphon app.');
       throw new Error(`PsiCash: If referrer isn't "${ourOrigin}" then params must be in URL; got referrer "${referrerOrigin}" but URL params are bad.`);
     }
   }
