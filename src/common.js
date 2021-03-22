@@ -142,7 +142,7 @@ export class PsiCashParams {
    * @returns {!String}
    */
   encode() {
-    return window.btoa(JSON.stringify(this));
+    return window.btoa(JSON.stringify(this)).replace(/=+$/, '');
   }
 
   /**
