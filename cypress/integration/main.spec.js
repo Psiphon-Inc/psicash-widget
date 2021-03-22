@@ -380,7 +380,9 @@ describe('token selection', function() {
     });
   });
 
-  // Our old params package didn't have a timestamp
+  // Older versions of clients didn't include a timestamp in the params payload.
+  // The general rule for them is that they should be accepted, but should be treated as
+  // older than any params _with_ a timestamp.
   it('should handle params with empty timestamp', function() {
     let olderTimestamp;
 
