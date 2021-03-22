@@ -238,41 +238,20 @@ function addPsiCashParamsToProduct(psicashParams) {
 
 /**
  * Show an message that blocks the page (and is not dismissable).
- * If this is not an error message (i.e., it's our "validating tokens" message), we will
- * delay a little before showing the message.
- * @param {boolean} error Whether the message is an error or a non-error status
  * @param {string} msg The text of the message
- * @returns {HTMLElement} The HTML element created. Can be removed with `.remove()`.
  */
-function showBlockingMessage(error, msg) {
+function showBlockingMessage(msg) {
   const outer = document.createElement('div');
   outer.style.cssText = 'position:fixed;left:0;right:0;top:0;bottom:0;background:rgba(0,0,0,0.8);height:100%;width:100%;z-index:999;overflow:hidden;';
 
   const inner = document.createElement('div');
   inner.style.cssText = 'background:#FFF;padding:30px;text-align:center;top:45%;position:relative;font-size:30px;font-weight:bold;';
-  inner.style.color = error ? '#9c0000' : '#000';
+  inner.style.color = '#9c0000';
   inner.style.boxShadow = `0 0 15px ${inner.style.color}`;
-  inner.textContent = msg;
-
-  if (!error) {
-    // Delay showing the message. Hopefully we finish our background activity and clear
-    // the message before it needs to shown. Note that we're still putting up the overlay
-    // to block the page, but with opacity of zero, so it's fully transparent. If we
-    // didn't put it up at all, we'd run the risk that the user could take page actions
-    // that we don't want before we've validated their tokens.
-    const initialOpacity = outer.style.opacity;
-    outer.style.opacity = '0';
-    setTimeout(() => {
-      // We can do this unconditionally. If outer.remove() has been called, then it won't
-      // be displayed.
-      outer.style.opacity = initialOpacity;
-    }, 500);
-  }
+  inner.innerHTML = msg;
 
   outer.appendChild(inner);
   document.body.appendChild(outer);
-
-  return outer;
 }
 
 // Do the work.
@@ -294,7 +273,7 @@ function showBlockingMessage(error, msg) {
     // This helps prevent token poisoning.
     // (This check can be circumvented by browser settings, etc., but we should still check it.)
     if (referrerOrigin) {
-      showBlockingMessage(true, 'This site must be launched directly from the Psiphon app.');
+      showBlockingMessage('Please launch this site directly from the Psiphon app.');
       throw new Error(`PsiCash: Bad referrer; must be empty or "${ourOrigin}"; got "${referrerOrigin}"`);
     }
 
@@ -304,21 +283,29 @@ function showBlockingMessage(error, msg) {
     const urlParams = common.PsiCashParams.fromURLPayload(utils.getURLParam(location.href, common.PSICASH_URL_PARAM));
     if (!urlParams) {
       // Either the URL param is missing, or the couldn't be parsed.
-      showBlockingMessage(true, 'This site must be launched directly from the Psiphon app.');
+      showBlockingMessage('Please launch this site directly from the Psiphon app.');
       throw new Error(`PsiCash: If referrer isn't "${ourOrigin}" then params must be in URL; got referrer "${referrerOrigin}" but URL params are bad.`);
     }
   }
 
   const psicashParams = getPsiCashParams();
-  const validationWaitElem = showBlockingMessage(false, 'Validating your PsiCash tokens. Please wait...');
-  validatePsiCashParams(psicashParams, function validatePsiCashParamsCallback(error, valid) {
-    validationWaitElem.remove();
+  addPsiCashParamsToLinks(ourOrigin, psicashParams);
+  addPsiCashParamsToProduct(psicashParams);
 
+  // Token validation does not block use of the site or show anything visual. It is not
+  // part of a security check, but rather a convenience: have the users tokens expired
+  // or did bad tokens otherwise get stored. If bad tokens are used to make a purchase,
+  // the server will notice this while processing the webhook and will reject and refund
+  // the purchase attempt. That's not a graceful flow, so we would _prefer_ to catch the
+  // bad tokens before the purchase is attempted, but it's not essential. In most cases,
+  // the validation check will take about 100ms, so the user looking at the page will give
+  // us plenty of time to check and only show a message if the tokens are found to be bad.
+  validatePsiCashParams(psicashParams, function validatePsiCashParamsCallback(error, valid) {
     if (error) {
       // Note that this is _not_ that the tokens are invalid, but that we failed to make
-      // the request to the server. So reloading to retry is the best course of action.
-      showBlockingMessage(true, 'Failed to validate PsiCash tokens. Please reload this page.');
-      throw new Error(`PsiCash: validatePsiCashParams returned error: ${error}`);
+      // the request to the server. We _could_ block the UI and ask the user to retry, but
+      // it's still likely the case that the tokens are good, so we're not going to.
+      utils.log(`PsiCash: validatePsiCashParams returned error: ${error}`);
     }
     else if (!valid) {
       // Our tokens are bad or missing.
@@ -326,12 +313,8 @@ function showBlockingMessage(error, msg) {
       psicashParams.tokens = null;
       utils.storageSet(consts.PARAMS_STORAGE_KEY, psicashParams, psicashParams.dev);
 
-      showBlockingMessage(true, 'PsiCash tokens are not valid. Reopen this site from the Psiphon app.');
+      showBlockingMessage('Your PsiCash tokens are not valid.<br>Please reopen this site from the Psiphon app.');
       throw new Error('PsiCash: Tokens are not valid');
     }
-
-    // We're okay to proceed
-    addPsiCashParamsToLinks(ourOrigin, psicashParams);
-    addPsiCashParamsToProduct(psicashParams);
   });
 })();
