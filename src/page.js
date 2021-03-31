@@ -142,6 +142,10 @@ function loadIframe() {
   iframeElement_ = document.createElement('iframe');
   iframeElement_.src = iframeSrc;
 
+  // In order to validate distinguishers, we need access to the full referrer URL from
+  // within the iframe code.
+  iframeElement_.referrerPolicy = 'no-referrer-when-downgrade';
+
   if (psicashParams_.debug) {
     iframeElement_.style.cssText = 'width:400px;height:400px;';
   }
