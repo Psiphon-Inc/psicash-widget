@@ -203,20 +203,45 @@ function validateDistinguisher(distinguisher) {
   // The distinguisher may be one of:
   // hostname.com
   // hostname.com/partial/path
+  //
+  // We require document.referrer to not be empty, but we cannot rely on it to contain
+  // more than the hostname. We have found that it's impossible to get Safari or Brave to
+  // pass more than the hostname cross-origin.
+  //
+  // We will validate using as much referrer we have available, to help prevent widget
+  // configuration mistakes, but the hostname alone will have to be sufficient for safety.
+  //
+  // Note that some browsers (Safari) provide an origin-only referrer without a trailing
+  // slash, and some (Brave) with a trailing slash.
+  //
+  // If the browser or host page is configured in such a way that we don't get a referrer
+  // at all, then the validation will always fail. This is by design -- otherwise it would
+  // be too easy for an exploitative page to host our widget with `iframe.referrerPolicy=no-referrer`
+  // and we would accept any distinguisher.
 
-  // A bad match we're defending against here: If the distinguisher is
-  // hostname.com and the attacker uses a domain like hostname.com.nogood.com
+  // We're not doing a simple prefix check because that would introduce a vulnerability like:
+  // If the distinguisher is hostname.com and the attacker uses a domain like hostname.com.nogood.com
 
-  const pageURLComponents = common.urlComponents(document.referrer);
+  const referrerURLComponents = common.urlComponents(document.referrer);
+  const referrerHost = common.getHost(referrerURLComponents);
+  const referrerPath = (referrerURLComponents.pathname === '/' ? null : referrerURLComponents.pathname);
 
-  const pageHost = common.getHost(pageURLComponents);
-  const distinguisherHost = distinguisher.split('/')[0];
-  if (pageHost !== distinguisherHost) {
+  const distinguisherComponents = distinguisher.match(/^([^/]+)(.*)$/);
+  if (!distinguisherComponents || distinguisherComponents.length !== 3) {
+    return false;
+  }
+  const distinguisherHost = distinguisherComponents[1];
+  const distinguisherPath = distinguisherComponents[2];
+
+  if (referrerHost !== distinguisherHost) {
     return false;
   }
 
-  const pageURLComparator = pageHost + pageURLComponents.pathname;
-  return pageURLComparator.indexOf(distinguisher) === 0;
+  if (referrerPath && referrerPath.indexOf(distinguisherPath) !== 0) {
+    return false;
+  }
+
+  return true;
 }
 
 /**

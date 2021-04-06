@@ -142,8 +142,8 @@ function loadIframe() {
   iframeElement_ = document.createElement('iframe');
   iframeElement_.src = iframeSrc;
 
-  // In order to validate distinguishers, we need access to the full referrer URL from
-  // within the iframe code.
+  // Not all browsers (Safari and Brave) respect this property, but if we _can_ use the
+  // hostname+path for distinguisher validation, then we want to.
   iframeElement_.referrerPolicy = 'no-referrer-when-downgrade';
 
   if (psicashParams_.debug) {
