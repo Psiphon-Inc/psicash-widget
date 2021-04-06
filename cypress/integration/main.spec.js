@@ -142,6 +142,24 @@ describe('distinguisher mismatch', function() {
       cy.psiTestRequestFailure(action, 'distinguisher is invalid', null, {distinguisher: 'mismatch.com/nope'});
     });
   });
+
+  it('should disallow a bad path', function() {
+    cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, this.psicashParams));
+
+    cy.wrap(transActions).each((action) => {
+      cy.psiTestRequestFailure(action, 'distinguisher is invalid', null, {distinguisher: 'localhost:33333/nope'});
+    });
+  });
+
+  it('should allow a just the hostname', function() {
+    cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, this.psicashParams));
+
+    cy.wrap(transActions).each((action) => {
+      const baseURLHost = Cypress.config().baseUrl.match(/^https?:\/\/([^/]+)/)[1];
+
+      cy.psiTestRequestSuccess(action, {distinguisher: baseURLHost});
+    });
+  });
 });
 
 // Ensure that we get 200 OK responses from our requests (rather than allowing 429).
@@ -169,7 +187,7 @@ describe('local nextAllowed limiting', function() {
     // First one succeeds
     cy.psiTestRequestSuccess(transActions[0], null, /*require200=*/true);
 
-    cy.psiTestRequestFailure(transActions[0], null, '429');
+    cy.psiTestRequestFailure(transActions[0], null, 'not yet allowed');
   });
 });
 

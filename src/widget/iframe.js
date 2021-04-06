@@ -272,8 +272,8 @@ function validateDistinguisher(distinguisher) {
   // We're not doing a simple prefix check because that would introduce a vulnerability like:
   // If the distinguisher is hostname.com and the attacker uses a domain like hostname.com.nogood.com
 
-  const referrerURLComponents = common.urlComponents(document.referrer);
-  const referrerHost = common.getHost(referrerURLComponents);
+  const referrerURLComponents = utils.urlComponents(document.referrer);
+  const referrerHost = utils.getHost(referrerURLComponents);
   const referrerPath = (referrerURLComponents.pathname === '/' ? null : referrerURLComponents.pathname);
 
   const distinguisherComponents = distinguisher.match(/^([^/]+)(.*)$/);
