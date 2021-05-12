@@ -353,8 +353,8 @@ function makePsiCashServerRequestHelper(config, start=Date.now(), attempt=1, las
   }
 
   let xhr = new(window.XMLHttpRequest || window.ActiveXObject)('MSXML2.XMLHTTP.3.0');
-  xhr.timeout = remainingTime;
   xhr.open(config.method, reqURL, true);
+  xhr.timeout = remainingTime;
   xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
   xhr.setRequestHeader('X-PsiCash-Auth', config.psicashParams.tokens);
   xhr.setRequestHeader('X-PsiCash-Metadata', JSON.stringify(config.psicashParams.metadata));

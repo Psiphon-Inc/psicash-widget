@@ -17,6 +17,7 @@
  *
  */
 
+import '../polyfills.js';
 import * as consts from '../consts.js';
 import * as utils from '../utils.js';
 import * as common from '../common.js';
