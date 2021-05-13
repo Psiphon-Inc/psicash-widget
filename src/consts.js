@@ -32,7 +32,7 @@ export const PSICASH_API_PREFIX =     'https://api.psi.cash/v1';
 /**
  * The URL prefix to be used for PsiCash API requests to the dev server.
  */
-export const PSICASH_API_PREFIX_DEV = 'https://dev-api.psi.cash/v1';
+export const PSICASH_API_PREFIX_DEV = 'https://api.dev.psi.cash/v1';
 //export const PSICASH_API_PREFIX_DEV = 'http://localhost:51337/v1';
 
 /**
