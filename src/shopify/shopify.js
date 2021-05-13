@@ -19,6 +19,7 @@
 
 /* eslint-env jquery */
 
+import '../polyfills.js';
 import * as consts from '../consts.js';
 import * as utils from '../utils.js';
 import * as common from '../common.js';
@@ -215,6 +216,7 @@ function addPsiCashParamsToLinks(ourOrigin, psicashParams) {
   mutationObserver.observe(document.body, {
     subtree: true,
     childList: true,
+    attributes: true,
     attributeFilter: ['href']
   });
 }
@@ -241,17 +243,26 @@ function addPsiCashParamsToProduct(psicashParams) {
  * @param {string} msg The text of the message
  */
 function showBlockingMessage(msg) {
+  removePageBlocker();
+
   const outer = document.createElement('div');
-  outer.style.cssText = 'position:fixed;left:0;right:0;top:0;bottom:0;background:rgba(0,0,0,0.8);height:100%;width:100%;z-index:999;overflow:hidden;';
+  outer.className = 'psicash-page-blocker psicash-page-blocker-error';
 
   const inner = document.createElement('div');
-  inner.style.cssText = 'background:#FFF;padding:30px;text-align:center;top:45%;position:relative;font-size:30px;font-weight:bold;';
-  inner.style.color = '#9c0000';
-  inner.style.boxShadow = `0 0 15px ${inner.style.color}`;
   inner.innerHTML = msg;
 
   outer.appendChild(inner);
   document.body.appendChild(outer);
+}
+
+/**
+ * Remove any page-blocker element.
+ */
+function removePageBlocker() {
+  const elems = document.querySelectorAll('.psicash-page-blocker');
+  for (let i = 0; i < elems.length; i++) {
+    elems[i].remove();
+  }
 }
 
 // Do the work.
@@ -301,6 +312,8 @@ function showBlockingMessage(msg) {
   // the validation check will take about 100ms, so the user looking at the page will give
   // us plenty of time to check and only show a message if the tokens are found to be bad.
   validatePsiCashParams(psicashParams, function validatePsiCashParamsCallback(error, valid) {
+    removePageBlocker();
+
     if (error) {
       // Note that this is _not_ that the tokens are invalid, but that we failed to make
       // the request to the server. We _could_ block the UI and ask the user to retry, but

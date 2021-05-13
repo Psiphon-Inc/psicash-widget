@@ -240,6 +240,7 @@ export function getURLParam(url, name) {
 
 /**
  * Get the src from the current script's tag. This can be used for retrieving params.
+ * This only works for scripts that end with `...psicash.js`, like `psicash.js` or `shopify-psicash.js`.
  * @returns {string}
  */
 export function getCurrentScriptURL() {

@@ -163,7 +163,7 @@ function shopify() {
     .transform(babelify, { presets : [ '@babel/env' ], plugins: [ '@babel/plugin-proposal-class-properties' ] });
 
   return b.bundle()
-    .pipe(source('psicash-shopify.js'))
+    .pipe(source('shopify-psicash.js'))
     .pipe(gulp.dest('dist/shopify'))
     //* disable uglification
     .pipe(buffer())
