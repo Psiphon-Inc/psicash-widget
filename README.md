@@ -2,11 +2,7 @@
 
 This repo includes code for the PsiCash "widget" (embedded on landing pages to earn PsiCash) and our Shopify store. (They are both here because they are similar and share a lot of code.)
 
-## Widget
-
-Source is in [`./src/widget`](https://github.com/Psiphon-Inc/psicash-widget/tree/master/src/widget).
-
-### Setup
+## Setup
 
 Probably check this out when installing Gulp: https://gulpjs.com/docs/en/getting-started/quick-start
 
@@ -15,7 +11,7 @@ $ npm install --global gulp-cli
 $ npm install
 ```
 
-### Building and Testing
+## Building and Testing
 
 Build:
 ```
@@ -52,9 +48,9 @@ In order for the transactions to succeed, there will need to be a `transaction_t
 
 You will also have to modify the API server config to indicate the localhost origin for the widget requests. In `config_override.toml`, in the `[cors]` section, add a setting like `widget_origins = ["http://localhost:44444"]`. Restart the server.
 
-### How it works
+## How it works
 
-#### App opens landing page
+### App opens landing page
 
 The app will open the landing page, passing the earner token to it via a hash param:
 
@@ -70,31 +66,46 @@ https://psip.me/?psicash=<payload>
 
 In either case, it may be appended to pre-existing params with `...&psicash=<tokens>`.
 
-#### Embedding the PsiCash widget
+### Landing page embeds the PsiCash widget
+
+See the ["Using the PsiCash widget"](#using-the-psicash-widget) section, below.
+
+### PsiCash script loads widget
+
+`psicash.js` creates an invisible iframe in the page like so:
 
 ```html
-<script async defer data-cfasync="false"
-  src="https://widget.psi.cash/v2/psicash.js">
-</script>
+<iframe
+  src="https://widget.psi.cash/v2/iframe.html#psicash=<payload>">
+</iframe>
+```
+
+The code in that iframe performs the requested transactions with the PsiCash server.
+
+## Using the PsiCash widget
+
+See the [wiki page](https://github.com/Psiphon-Inc/psiphon-issues/wiki/PsiCash-widget-use-on-websites) for more conceptual info.
+
+```html
+<script defer data-cfasync="false" src="https://widget.psi.cash/v2/psicash.js"></script>
 <script>
   function psicash() {
     psicash.queue = psicash.queue || [];
     psicash.queue.push(arguments);
   }
 
-  // This need not be provided to the calls below if it's the same as the page domain
-  var distinguisher = 'mylandingpage.com';
-
   // If you want a page-view reward:
+  psicash('page-view', {distinguisher: 'mylandingpage.com/path'});
+
+  // If the distinguisher is just the page domain, it can be omitted.
   psicash('page-view');
-  // If you need to provide an explicit distinguisher, use this form:
-  // psicash('page-view', {distinguisher});
 
   // If you want a click-through reward:
   document.querySelector('#mylink').addEventListener('click', function(event) {
     // Supress default navigation, so we don't leave the page before the reward completes
     event.preventDefault();
-    psicash('click-through', function(error, success) {
+
+    psicash('click-through', {distinguisher: 'mylandingpage.com/path'}, function(error, success) {
       // Callback fired, reward complete, continue navigation.
       // Probably ignore error or success, as they don't influence the navigation.
     });
@@ -107,8 +118,8 @@ In either case, it may be appended to pre-existing params with `...&psicash=<tok
 ```js
 psicash('desired-action-name');
 psicash('desired-action-name', callback);
-psicash('desired-action-name', {distinguisher});
-psicash('desired-action-name', {distinguisher}, callback);
+psicash('desired-action-name', {distinguisher: distinguisher});
+psicash('desired-action-name', {distinguisher: distinguisher}, callback);
 ```
 
 Possible action types:
@@ -118,33 +129,28 @@ Possible action types:
 
 Callbacks are passed `(error, success)`. `error` indicates a hard, probably unrecoverable failure (such as an absence of tokens). `success` indicates that the action was successful; if false it may indicate a soft failure, such as a reward-rate-limiting 429 response. If `error` is non-null, `success` is meaningless.
 
+### `<script>` tag attributes
 
-##### `<script>` tag attributes
-
-Both `async` and `defer` are included [because](https://html.spec.whatwg.org/multipage/scripting.html):
-> The `defer` attribute may be specified even if the `async` attribute is specified, to cause legacy Web browsers that only support `defer` (and not `async`) to fall back to the `defer` behavior instead of the blocking behavior that is the default.
+[`defer`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script) causes the script to be executed after the document has been parsed, but before `DOMContentLoaded` is fired.
 
 `data-cfasync="false"` is used to [disable](https://support.cloudflare.com/hc/en-us/articles/200169436--How-can-I-have-Rocket-Loader-ignore-my-script-s-in-Automatic-Mode-) Cloudflare's use of Rocket Loader on the script. We have observed the script failing to be loaded by Rocket Loader, which is [apparently not uncommon](https://support.cloudflare.com/hc/en-us/articles/200169456-Why-is-JavaScript-or-jQuery-not-working-on-my-site-).
 
 
-#### PsiCash script loads widget
+### Accessing the PsiCash parameters
 
-`psicash.js` creates an invisible iframe in the page like so:
+The info passed in the `#!psicash=`/`?psicash=` PsiCash URL parameters is exposed to the web page. This can be useful when trying to determine the platform and version of the client app.
 
-```html
-<iframe
-  src="https://widget.psi.cash/v2/iframe.html#psicash=<payload>">
-</iframe>
-```
-
-The code in that iframe performs the requested transactions with the PsiCash server.
-
-#### Accessing the PsiCash parameters
-
-The info passed in the `#!psicash=`/`?psicash=` PsiCash URL parameters is exposed to the web page. This can be useful when trying to determine the platform and version of the client app. The info can be accessed like so:
+Note that the params are only available after `psicash.js` has full loaded, so accessing them needs to wait until the DOM is loaded.
 
 ```javascript
-window._psicash.params()
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function() {
+    var clientRegion = window._psicash.params().metadata.client_region;
+  }, false);
+}
+else {
+  var clientRegion = window._psicash.params().metadata.client_region;
+}
 
 {
   "timestamp": "2020-09-29T19:52:44Z",
@@ -159,6 +165,26 @@ window._psicash.params()
   },
   "debug": "0",
   "v": 1
+}
+```
+
+### Timeouts
+
+All actions have default timeouts. `page-view` is currently ten seconds while `click-through` is one second (it's shorter because it delays the user going to another page). (Updated defaults can be found in [this file](src/common.js) by searching for `PsiCashActionDefaultTimeout`.)
+
+If the default isn't what's desired, a timeout can be specified in milliseconds like so:
+```js
+psicash('desired-action-name', {distinguisher: distinguisher, timeout: 2000}, callback);
+```
+
+There is a safety timeout surrounding all action requests, so the callback will always fire in the time allowed, regardless of errors.
+
+### Tip and tricks
+
+To create a helper function that makes a distinguisher for the current hostname and path:
+```js
+function getDistinguisher() {
+  return location.host + location.pathname;
 }
 ```
 
