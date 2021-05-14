@@ -244,6 +244,22 @@ function psicash(action, obj, callback) {
     timeout = common.PsiCashActionDefaultTimeout(action);
   }
 
+  // No matter how catastrophically the rest of the code path fails, we still want to call
+  // the callback by the timeout.
+  if (callback) {
+    const origCallback = callback;
+    let callbackCalled = false;
+    callback = function callbackWrapper() {
+      if (callbackCalled) {
+        return;
+      }
+      callbackCalled = true;
+      origCallback.apply(this, arguments);
+    };
+
+    setTimeout(() => callback('timed out', false, 'safety timeout hit'), timeout);
+  }
+
   const msg = sendMessageToIframe(action, timeout, obj, callback);
 
   // We want to guarantee that the callback fires within the specified time. Hopefully
