@@ -138,20 +138,8 @@ Callbacks are passed `(error, success)`. `error` indicates a hard, probably unre
 
 ### Accessing the PsiCash parameters
 
-The info passed in the `#!psicash=`/`?psicash=` PsiCash URL parameters is exposed to the web page. This can be useful when trying to determine the platform and version of the client app.
-
-Note that the params are only available after `psicash.js` has full loaded, so accessing them needs to wait until the DOM is loaded.
-
-```javascript
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', function() {
-    var clientRegion = window._psicash.params().metadata.client_region;
-  }, false);
-}
-else {
-  var clientRegion = window._psicash.params().metadata.client_region;
-}
-
+The info passed in the `#!psicash=`/`?psicash=` PsiCash URL parameters is exposed to the web page. This can be useful when trying to determine the platform and version of the client app. The params object looks like this:
+```js
 {
   "timestamp": "2020-09-29T19:52:44Z",
   "tokens": "<tokens>",
@@ -166,6 +154,38 @@ else {
   "debug": "0",
   "v": 1
 }
+```
+
+Note that the params are only available after `psicash.js` has full loaded, so accessing them needs to wait until the DOM is loaded. Include the `getPsiCashParams` helper function below to make it easy to access the params.
+
+```js
+/**
+ * Retrieves the PsiCash params object when available, passing them to the callback.
+ * @param callback Function that will receive the PsiCash params object.
+ */
+function getPsiCashParams(callback) {
+  if (document.readyState === 'loading') {
+    // The document is still loading, so wait until it's done...
+    document.addEventListener('DOMContentLoaded', function() {
+      // ...before accessing the params.
+      callback(window._psicash.params());
+    });
+  }
+  else {
+    // The document is already done loading, so we can access the params now.
+    // Make the callback truly asynchronous by wrapping it in setTimeout.
+    setTimeout(function() { callback(window._psicash.params()); }, 0);
+  }
+}
+```
+
+And use the helper like so:
+```js
+getPsiCashParams(function(params) {
+  // ... modify a deep link or whatever
+  var client_region = params.metadata.client_region;
+  // ... etc.
+});
 ```
 
 ### Timeouts
