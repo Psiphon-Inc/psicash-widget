@@ -236,6 +236,7 @@
         "prefer-const": "off",
         "prefer-destructuring": "off",
         "prefer-numeric-literals": "off",
+        "prefer-nullish-coalescing": "on",
         "prefer-promise-reject-errors": "off",
         "prefer-reflect": "off",
         "prefer-rest-params": "off",

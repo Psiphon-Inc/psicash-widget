@@ -38,7 +38,9 @@ $ npx cypress open
 
 Deploy to S3 (with [credentials set up](https://docs.aws.amazon.com/sdk-for-javascript/v2/developer-guide/configuring-the-jssdk.html)):
 ```
-$ gulp build && gulp deploy
+$ gulp build && gulp deployDev
+...or...
+$ gulp build && gulp deployProd
 ```
 ...and then do a CloudFront invalidation by hand (TODO: consider doing it [automatically](https://www.npmjs.com/package/gulp-cloudfront-invalidate-aws-publish)).
 

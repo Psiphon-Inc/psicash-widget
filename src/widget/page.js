@@ -236,7 +236,7 @@ function psicash(action, obj, callback) {
     callback = obj;
     obj = {};
   }
-  obj = obj || {};
+  obj = obj ?? {};
 
   /** @type {?number} */
   let timeout = obj.timeout;

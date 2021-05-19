@@ -2,20 +2,22 @@
 
 'use strict';
 
-let browserify = require('browserify');
-let babelify   = require('babelify');
-let gulp = require('gulp');
-let source = require('vinyl-source-stream');
-let buffer = require('vinyl-buffer');
-let log = require('gulplog');
-let uglify = require('gulp-uglify');
-let sourcemaps = require('gulp-sourcemaps');
-let connect = require('gulp-connect');
-let del = require('del');
-let replace = require('gulp-replace');
-let merge = require('merge-stream');
-var exec = require('child_process').exec;
-var awspublish = require('gulp-awspublish');
+const browserify = require('browserify');
+const babelify   = require('babelify');
+const gulp = require('gulp');
+const source = require('vinyl-source-stream');
+const buffer = require('vinyl-buffer');
+const log = require('gulplog');
+const uglify = require('gulp-uglify');
+const sourcemaps = require('gulp-sourcemaps');
+const connect = require('gulp-connect');
+const del = require('del');
+const replace = require('gulp-replace');
+const rename = require('gulp-rename');
+const merge = require('merge-stream');
+const exec = require('child_process').exec;
+const awspublish = require('gulp-awspublish');
+const path = require('path');
 
 
 let config = {
@@ -122,10 +124,30 @@ function gitInfo(cb) {
   });
 }
 
-function s3Upload() {
+function deployProd(callback) {
+  const readline = require('readline').createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  readline.question('You are attempted to deploy to prod. Are you sure? ', response => {
+    readline.close();
+    if (response !== 'yes') {
+      callback(new Error('Response is not "yes"; aborting'));
+    }
+
+    callback(null, s3Upload(false));
+  });
+}
+
+function deployDev() {
+  return s3Upload(true);
+}
+
+function s3Upload(isDev) {
   // create a new publisher using S3 options
   // http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#constructor-property
-  var publisher = awspublish.create(
+  const publisher = awspublish.create(
     {
       region: 'us-east-1',
       params: {
@@ -135,12 +157,24 @@ function s3Upload() {
   );
 
   // define custom headers
-  var headers = {
+  const headers = {
     'Cache-Control': 'must-revalidate, public'
   };
 
   return gulp
     .src(`${config.dist.base}/*/**`)
+
+    // Dev files live in the same bucket, with different key prefix
+    .pipe(
+      rename(function(filepath) {
+        if (isDev) {
+          let dirs = filepath.dirname.split(path.sep);
+          dirs[0] = `${dirs[0]}-dev`;
+          filepath.dirname = dirs.join(path.sep);
+        }
+      })
+    )
+
     // gzip, Set Content-Encoding headers and add .gz extension
     //.pipe(awspublish.gzip({ ext: '.gz' })) // CloudFront auto-compresses for us
 
@@ -175,6 +209,13 @@ function shopify() {
     .pipe(gulp.dest('dist/shopify'));//*/
 }
 
+function devifyBuild() {
+  // To serve the landing pages and widget we need to rewrite some of the URLs in the files.
+  return gulp.src([`${config.dist.landing}/**`])
+    .pipe(replace('https://widget.psi.cash', `https://widget.dev.psi.cash`))
+    .pipe(gulp.dest(config.dist.landing));
+}
+
 let fullBuild = gulp.series(javascript, uglification, dist, gitInfo);
 let serveBuild = gulp.series(javascript, dist, discardSourceMap, webserverPrep);
 
@@ -186,4 +227,5 @@ exports.clean = clean;
 exports.build = gulp.series(clean, fullBuild);
 exports.serve = gulp.series(clean, serveBuild, webserver, watch);
 exports.shopify = gulp.series(shopify);
-exports.deploy = s3Upload;
+exports.deployDev = gulp.series(devifyBuild, deployDev);
+exports.deployProd = deployProd;
