@@ -45,6 +45,11 @@
     <h1>DEV: Landing Page with PsiCash</h1>
 
     <hr>
+
+    <button onclick="window._psicash.clearLocalStorage(true, false, function(){alert('done');})">Clear page localStorage</button>
+    <button onclick="window._psicash.clearLocalStorage(false, true, function(){alert('done');})">Clear widget localStorage</button>
+
+    <hr>
     <div>
       <label>init:</label>
       <ul>
