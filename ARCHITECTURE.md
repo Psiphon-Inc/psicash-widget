@@ -124,7 +124,7 @@ General rules:
 | none/store | good          | same, older                 | no change         | allowed          |                    |
 | none/store | good          | good, newer                 | new tokens        | allowed          |                    |
 | none/store | good          | good, older                 | no change         | allowed          |                    |
-| none/store | good          | old                         | no change         | allowed          |                    |
+| none/store | good          | old                         | no change         | disallowed       | "launch directly"  |
 | none/store | good          | no timestamp                | no change         | allowed          |                    |
 | none/store | good          | invalid, newer              | none              | disallowed       | "tokens not valid" |
 | none/store | good          | invalid, older              | no change         | allowed          |                    |

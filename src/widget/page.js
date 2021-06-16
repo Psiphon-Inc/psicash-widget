@@ -207,12 +207,17 @@ function sendMessageToIframe(type, timeout, payload, callback) {
 
 /**
  * Expose a function to the page, on `window._psicash`.
- * @param {boolean} debugOnly Only exposes the function if debug mode is detected.
+ * If `prodAllowed` and `devAllowed` are both false, the function will only be exposed in
+ * local testing builds.
+ * @param {boolean} prodAllowed Exposes the function in prod builds.
+ * @param {boolean} devAllowed Exposes the function in dev builds.
  * @param {function} func
  * @param {string} funcName
  */
-function exposeToWindow(debugOnly, func, funcName) {
-  if (debugOnly && !consts.LOCAL_TESTING_BUILD) {
+function exposeToWindow(prodAllowed, devAllowed, func, funcName) {
+  if (!prodAllowed
+      && !(devAllowed && consts.isDevBuild())
+      && !consts.LOCAL_TESTING_BUILD) {
     return;
   }
   window._psicash = window._psicash || {};
@@ -330,7 +335,7 @@ function setUpPsiCashTag() {
   // contains that info.
   // NOTE: This is only exposing information that is already available to this page, just
   // in a more accessible form.
-  exposeToWindow(false, () => JSON.parse(JSON.stringify(psicashParams_)), 'params');
+  exposeToWindow(true, true, () => JSON.parse(JSON.stringify(psicashParams_)), 'params');
 
   // The iframe script will inform us when the next allowed reward is.
   window.addEventListener('message', function pageMessageHandler(event) {
@@ -373,7 +378,7 @@ function clearLocalStorage(page, iframe, callback) {
     setTimeout(callback, 1);
   }
 }
-exposeToWindow(true, clearLocalStorage, 'clearLocalStorage');
+exposeToWindow(false, true, clearLocalStorage, 'clearLocalStorage');
 
 /**
  * Get a dump of the iframe's localStorage. Used when testing.
@@ -383,4 +388,4 @@ exposeToWindow(true, clearLocalStorage, 'clearLocalStorage');
 function getIframeLocalStorage(callback) {
   sendMessageToIframe('debug-localStorage::get', null, null, callback);
 }
-exposeToWindow(true, getIframeLocalStorage, 'getIframeLocalStorage');
+exposeToWindow(false, false, getIframeLocalStorage, 'getIframeLocalStorage');

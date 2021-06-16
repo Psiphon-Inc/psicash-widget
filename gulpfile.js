@@ -211,9 +211,10 @@ function shopify() {
 
 function devifyBuild() {
   // To serve the landing pages and widget we need to rewrite some of the URLs in the files.
-  return gulp.src([`${config.dist.landing}/**`])
+  return gulp.src([`${config.dist.base}/*/**`])
     .pipe(replace('https://widget.psi.cash', `https://widget.dev.psi.cash`))
-    .pipe(gulp.dest(config.dist.landing));
+    .pipe(replace('IS_NOT_DEV_BUILD', 'IS_____DEV_BUILD'))
+    .pipe(gulp.dest(config.dist.base));
 }
 
 let fullBuild = gulp.series(javascript, uglification, dist, gitInfo);

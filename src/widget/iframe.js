@@ -110,8 +110,10 @@ function processPageMessage(eventData) {
   utils.log('page message:', msg.type, JSON.stringify(msg));
 
   if (msg.type.startsWith('debug-localStorage')) {
-    if (!consts.LOCAL_TESTING_BUILD) {
-      throw new Error('only allowed when testing');
+    if (!consts.LOCAL_TESTING_BUILD && !consts.isDevBuild()) {
+      // Remember that the incoming message could be from any page that embeds this iframe
+      // and should not be trusted.
+      throw new Error('only allowed when dev or testing');
     }
 
     switch (msg.type) {
