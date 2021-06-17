@@ -151,7 +151,7 @@ describe('distinguisher mismatch', function() {
     });
   });
 
-  it('should allow a just the hostname', function() {
+  it('should allow just the hostname', function() {
     cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, this.psicashParams));
 
     cy.wrap(transActions).each((action) => {
