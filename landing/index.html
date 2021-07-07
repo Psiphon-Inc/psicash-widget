@@ -60,6 +60,8 @@
 
     <script defer data-cfasync="false" src="https://widget.psi.cash/v2/psicash.js?debug=1"></script>
     <script>
+      logger('location.href=', location.href);
+
       function psicash() {
         psicash.queue = psicash.queue || [];
         psicash.queue.push(arguments);
