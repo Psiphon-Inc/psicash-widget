@@ -47,48 +47,49 @@
 
     <script>
       function logger() {
+        let values = [];
+        for (let i = 0; i < arguments.length; i++) {
+          values.push(arguments[i]);
+        }
         const logElem = document.createElement('li');
-        logElem.textContent = JSON.stringify(arguments);
+        logElem.textContent = JSON.stringify(values);
         document.getElementById('logs').appendChild(logElem);
       }
       console.log = console.error = console.warn = logger;
     </script>
 
-    <script defer data-cfasync="false"
-    src="https://widget.psi.cash/v2/psicash.js?debug=1">
-    </script>
+    <script defer data-cfasync="false" src="https://widget.psi.cash/v2/psicash.js?debug=1"></script>
     <script>
-    function psicash() {
-    psicash.queue = psicash.queue || [];
-    psicash.queue.push(arguments);
-    }
+      function psicash() {
+        psicash.queue = psicash.queue || [];
+        psicash.queue.push(arguments);
+      }
 
-    psicash('init', function(err, success, detail) {
-    console.log('init callback fired; err=', err, '; success=', success);
-    document.querySelector('#init-error').textContent = err ? err : '(none)';
-    document.querySelector('#init-success').textContent = success;
-    document.querySelector('#init-detail').textContent = detail;
-    document.querySelector('#init-done').textContent = 'DONE';
-    });
+      psicash('init', function(err, success, detail) {
+        console.log('init callback fired; err=', err, '; success=', success);
+        document.querySelector('#init-error').textContent = err ? err : '(none)';
+        document.querySelector('#init-success').textContent = success;
+        document.querySelector('#init-detail').textContent = detail;
+        document.querySelector('#init-done').textContent = 'DONE';
+      });
 
-    psicash('page-view', function(err, success, detail) {
-    console.log('page-view callback fired; err=', err, '; success=', success);
-    document.querySelector('#page-view-error').textContent = err ? err : '(none)';
-    document.querySelector('#page-view-success').textContent = success;
-    document.querySelector('#page-view-detail').textContent = detail;
-    });
+      psicash('page-view', function(err, success, detail) {
+        console.log('page-view callback fired; err=', err, '; success=', success);
+        document.querySelector('#page-view-error').textContent = err ? err : '(none)';
+        document.querySelector('#page-view-success').textContent = success;
+        document.querySelector('#page-view-detail').textContent = detail;
+      });
 
-    // Use a timeout to simulate a later click-through event
-    setTimeout(function clickThroughEvent() {
-    psicash('click-through', function(err, success, detail) {
-    console.log('click-through callback fired; err=', err, '; success=', success);
-    document.querySelector('#click-through-error').textContent = err ? err : '(none)';
-    document.querySelector('#click-through-success').textContent = success;
-    document.querySelector('#click-through-detail').textContent = detail;
-    });
-    }, 2000);
+      // Use a timeout to simulate a later click-through event
+      setTimeout(function clickThroughEvent() {
+        psicash('click-through', function(err, success, detail) {
+          console.log('click-through callback fired; err=', err, '; success=', success);
+          document.querySelector('#click-through-error').textContent = err ? err : '(none)';
+          document.querySelector('#click-through-success').textContent = success;
+          document.querySelector('#click-through-detail').textContent = detail;
+        });
+      }, 2000);
     </script>
-
 
   </body>
 </html>
