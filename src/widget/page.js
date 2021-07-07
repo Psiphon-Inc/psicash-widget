@@ -115,7 +115,7 @@ function loadIframe() {
   iframeElement_.referrerPolicy = 'no-referrer-when-downgrade';
 
   if (psicashParams_.debug) {
-    iframeElement_.style.cssText = 'width:400px;height:400px;';
+    iframeElement_.style.cssText = 'width:90%;height:600px;';
   }
   else {
     // Make invisible.
