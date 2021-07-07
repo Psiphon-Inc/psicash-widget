@@ -14,17 +14,24 @@
   <body>
     <h1>PsiCash Iframe Contents</h1>
 
+    <hr>
+    <label>page logs:</label>
     <ul id="logs">
     </ul>
 
     <script>
       function logger() {
+        let values = [];
+        for (let i = 0; i < arguments.length; i++) {
+          values.push(arguments[i]);
+        }
         const logElem = document.createElement('li');
-        logElem.textContent = JSON.stringify(arguments);
+        logElem.textContent = JSON.stringify(values);
         document.getElementById('logs').appendChild(logElem);
       }
       console.log = console.error = console.warn = logger;
     </script>
+
     <script src="psicash.js?debug=1"></script>
   </body>
 </html>
