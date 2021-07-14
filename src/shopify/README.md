@@ -94,3 +94,24 @@ The result will be in `./dist/shopify`.
    - Search for `_setCartPopupProductDetails` or `item.properties`.
    - Prevent that code from formatting the properties into the cart popup.
 6. ...The Checkout page _still_ shows the properties, and it's not editable in the theme, and there doesn't seem to be a way to disable showing the properties. But they don't show if they're prefixed with underscore. So I guess we have to require that. Which calls into question the necessity of the above steps. So maybe test first before bothering.
+
+#### Theme fixes
+
+Right now this only applies to the dev store. The site won't load in Internet Explorer 11 (which we support) with this error:
+`Line 131 of SCRIPT445 (link.dispatchEvent(new Event('load')); ) -- Object doesn't support this action`
+
+This can be fixed by modifying `Layout/theme.liquid` like so:
+```js
+/*PSIPHON*/
+// IE11 requires an event to be init'd before being passed to dispatchEvent
+if (window.navigator.userAgent.match(/Trident\/(\d+)/)) {
+   var event = document.createEvent("Event");
+   event.initEvent("load", false, true);
+   link.dispatchEvent(event);
+}
+else {
+   // This is the original code
+   link.dispatchEvent(new Event('load'));
+}
+/*/PSIPHON*/
+```
