@@ -100,7 +100,7 @@ describe('no iframe storage (like Safari)', function() {
 // time (so no page-stored params) with no URL parameters, then the iframe-stored params
 // should be used successfully.
 describe('no page storage (like direct visit to new landing page)', function() {
-  it('should succeed', function() {
+  it('should use widget tokens when there are no page params at all', function() {
     // Load params into storage
     cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, this.psicashParams));
     // Clear page storage.
@@ -111,7 +111,21 @@ describe('no page storage (like direct visit to new landing page)', function() {
     cy.wrap(allActions).each((action) => {
       cy.psiTestRequestSuccess(action);
     });
+  });
 
+  it('should use widget tokens when there are page params with no tokens', function() {
+    // Load params into storage
+    cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, this.psicashParams));
+    // Clear page storage.
+    cy.clearLocalStorage(true, false);
+    // Visit with no tokens in URL (but other params present)
+    const tokenlessParams = JSON.parse(JSON.stringify(this.psicashParams));
+    tokenlessParams.tokens = tokenlessParams.timestamp = null;
+    cy.psivisit(helpers.urlWithParams(helpers.ParamsPrefixes.HASHBANG, tokenlessParams));
+
+    cy.wrap(allActions).each((action) => {
+      cy.psiTestRequestSuccess(action);
+    });
   });
 });
 

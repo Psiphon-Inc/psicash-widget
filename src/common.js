@@ -169,6 +169,10 @@ export class PsiCashParams {
       // May return null
       return urlParams || localParams;
     }
+    else if (!!urlParams.tokens !== !!localParams.tokens) {
+      // If one has tokens and the other doesn't, use the tokens.
+      return urlParams.tokens ? urlParams : localParams;
+    }
     else if (!urlParams.timestamp || !localParams.timestamp) {
       // Prefer localParams only if it has a timestamp and urlParams doesn't.
       return localParams.timestamp ? localParams : urlParams;
