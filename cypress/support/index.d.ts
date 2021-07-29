@@ -19,9 +19,10 @@ declare namespace Cypress {
 
     /**
      * Retrieve the contents of the iframe's localStorage.
+     * @params loadPage If true, the page will be (re)loaded before accessing localStorage
      * @returns {Object}
      */
-    getIframeLocalStorage(): Chainable<JQuery<E>>
+    getIframeLocalStorage(loadPage: boolean): Chainable<JQuery<E>>
 
     /**
      * Make and test a PsiAction action request. Expect success.

@@ -12,7 +12,7 @@ NOTES
 const initAction = 'init';
 const transActions = ['page-view', 'click-through'];
 const allActions = [initAction].concat(transActions);
-const LONG_ENOUGH_WAIT = 1000; // depends on the earning timeout for the page
+const LONG_ENOUGH_WAIT = 2000; // depends on the earning timeout for the page
 
 before(function() {
   cy.fixture('params').as('psicashParams');
@@ -191,6 +191,7 @@ describe('actual 200 OK (after wait)', function() {
 });
 
 // Ensure that we get 200 OK responses from our requests (rather than allowing 429).
+// NOTE: Failure of this test might be due to client/server clock skew.
 describe('local nextAllowed limiting', function() {
   it('should prevent a second attempt without a page reload', function() {
     // Sleep long enough to ensure 200 success, to populate nextAllowed
@@ -231,7 +232,7 @@ describe('401 response', function() {
     cy.psiTestRequestFailure(transActions[0], null, '401');
 
     // Getting that 401 should have nullified the token
-    cy.getIframeLocalStorage().then(function(iframeLS) {
+    cy.getIframeLocalStorage(false).then(function(iframeLS) {
       expect(typeof iframeLS).to.equal('object');
       expect(typeof iframeLS['PsiCash-Dev::v2::PsiCashParams']).to.equal('string');
       const psicashParams = JSON.parse(iframeLS['PsiCash-Dev::v2::PsiCashParams']);

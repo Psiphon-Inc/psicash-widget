@@ -158,7 +158,6 @@ export class PsiCashParams {
    * Compares `urlParams` and `localParams` and returns the object that has the newest tokens.
    * Comparing timestamps is preferred, otherwise `urlParams` takes priority (as it's
    * more likely to be new than the locally-stored params).
-   * Note that the value of `params.tokens` is _not_ checked; null tokens are treated the same as non-null.
    * Returns null if both are null.
    * @param {?PsiCashParams} urlParams
    * @param {?PsiCashParams} localParams
@@ -169,16 +168,27 @@ export class PsiCashParams {
       // May return null
       return urlParams || localParams;
     }
+    else if (urlParams.timestamp && localParams.timestamp) {
+      // Both param sets have timestamps, so we can compare based on them
+      return (urlParams.timestamp > localParams.timestamp) ? urlParams : localParams;
+    }
+    else if (!!urlParams.timestamp !== !!localParams.timestamp) {
+      // One of the params has a timestamp and one doesn't; the one with the timestamp
+      // comes from a more recent client version and is considered newer.
+      // The null-ness of the tokens doesn't matter in this case. A possible scenario is
+      // that there are old timestampless params in widget storage and new timestamped
+      // params in the URL, with no tokens because the client is logged out. We still want
+      // to prefer the URL params in this case, as they're newer and the the timestampless
+      // params probably belong to a tracker that has been merged.
+      return urlParams.timestamp ? urlParams : localParams;
+    }
     else if (!!urlParams.tokens !== !!localParams.tokens) {
-      // If one has tokens and the other doesn't, use the tokens.
+      // If neither has a timestamp, and one has tokens and the other doesn't, use the tokens.
       return urlParams.tokens ? urlParams : localParams;
     }
-    else if (!urlParams.timestamp || !localParams.timestamp) {
-      // Prefer localParams only if it has a timestamp and urlParams doesn't.
-      return localParams.timestamp ? localParams : urlParams;
-    }
 
-    return (urlParams.timestamp > localParams.timestamp) ? urlParams : localParams;
+    // Neither have timestampns, and either both or neither have tokens. Prefer the URL params.
+    return urlParams;
   }
 }
 
