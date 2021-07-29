@@ -2,47 +2,19 @@
 <html lang="en" debug="true">
   <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <!-- prevent the favicon request -->
     <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
     <title>DEV: Landing Page with PsiCash</title>
-
-    <script async defer data-cfasync="false"
-      src="https://widget.psi.cash/v2/psicash.js?dev=1">
-    </script>
-    <script>
-      function psicash() {
-        psicash.queue = psicash.queue || [];
-        psicash.queue.push(arguments);
-      }
-
-      psicash('init', function(err, success, detail) {
-        console.log('init callback fired; err=', err, '; success=', success);
-        document.querySelector('#init-error').textContent = err ? err : '(none)';
-        document.querySelector('#init-success').textContent = success;
-        document.querySelector('#init-detail').textContent = detail;
-        document.querySelector('#init-done').textContent = 'DONE';
-      });
-
-      psicash('page-view', function(err, success, detail) {
-        console.log('page-view callback fired; err=', err, '; success=', success);
-        document.querySelector('#page-view-error').textContent = err ? err : '(none)';
-        document.querySelector('#page-view-success').textContent = success;
-        document.querySelector('#page-view-detail').textContent = detail;
-      });
-
-      // Use a timeout to simulate a later click-through event
-      setTimeout(function clickThroughEvent() {
-        psicash('click-through', function(err, success, detail) {
-          console.log('click-through callback fired; err=', err, '; success=', success);
-          document.querySelector('#click-through-error').textContent = err ? err : '(none)';
-          document.querySelector('#click-through-success').textContent = success;
-          document.querySelector('#click-through-detail').textContent = detail;
-        });
-      }, 2000);
-    </script>
   </head>
   <body>
     <h1>DEV: Landing Page with PsiCash</h1>
+
+    <hr>
+
+    <button style="height:3em" onclick="window._psicash.clearLocalStorage(true, false, function(){alert('done');})">Clear page localStorage</button>
+    <button style="height:3em" onclick="window._psicash.clearLocalStorage(false, true, function(){alert('done');})">Clear widget localStorage</button>
 
     <hr>
     <div>
@@ -74,5 +46,62 @@
         <li>Detail: <span id="click-through-detail"></span></li>
       </ul>
     </div>
+
+    <hr>
+    <label>page logs:</label>
+    <ul id="logs">
+    </ul>
+
+    <script>
+      function logger() {
+        let values = [];
+        for (let i = 0; i < arguments.length; i++) {
+          values.push(arguments[i]);
+        }
+        const logElem = document.createElement('li');
+        logElem.textContent = JSON.stringify(values);
+        document.getElementById('logs').appendChild(logElem);
+      }
+      console.log = console.error = console.warn = logger;
+    </script>
+
+    <script defer data-cfasync="false" src="https://widget.psi.cash/v2/psicash.js?dev=1&debug=1"></script>
+    <script>
+      logger('location.href=', location.href);
+      try {
+        logger('location.href decoded=', atob(location.href.match(/psicash=((?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?)/)[1]));
+      } catch (e) {}
+
+      function psicash() {
+        psicash.queue = psicash.queue || [];
+        psicash.queue.push(arguments);
+      }
+
+      psicash('init', function(err, success, detail) {
+        console.log('init callback fired; err=', err, '; success=', success);
+        document.querySelector('#init-error').textContent = err ? err : '(none)';
+        document.querySelector('#init-success').textContent = success;
+        document.querySelector('#init-detail').textContent = detail;
+        document.querySelector('#init-done').textContent = 'DONE';
+      });
+
+      psicash('page-view', function(err, success, detail) {
+        console.log('page-view callback fired; err=', err, '; success=', success);
+        document.querySelector('#page-view-error').textContent = err ? err : '(none)';
+        document.querySelector('#page-view-success').textContent = success;
+        document.querySelector('#page-view-detail').textContent = detail;
+      });
+
+      // Use a timeout to simulate a later click-through event
+      setTimeout(function clickThroughEvent() {
+        psicash('click-through', function(err, success, detail) {
+          console.log('click-through callback fired; err=', err, '; success=', success);
+          document.querySelector('#click-through-error').textContent = err ? err : '(none)';
+          document.querySelector('#click-through-success').textContent = success;
+          document.querySelector('#click-through-detail').textContent = detail;
+        });
+      }, 2000);
+    </script>
+
   </body>
 </html>

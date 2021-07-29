@@ -50,9 +50,89 @@ Cypress.Commands.add('psivisit', (url) => {
 
 Cypress.Commands.add('clearLocalStorage', (page, iframe) => {
   cy.log(`clearLocalStorage; page:${page}, iframe:${iframe}`);
-  cy.psivisit(helpers.url()).get('#init-done').should('have.text', 'DONE').window().then(win => {
+  cy.psivisit(helpers.url()).window().then(win => {
     return new Cypress.Promise((resolve, reject) => {
-      win._psicash.clearLocalStorage(page, iframe, () => {
+      win.psicash('init', (err, success, detail) => { // TODO: put in a const somewhere (deduplicate with the const in the spec)
+        // We don't care what the 'init' response is, just that it finished
+        win._psicash.clearLocalStorage(page, iframe, () => {
+          resolve();
+        });
+      });
+    });
+  });
+});
+
+Cypress.Commands.add('getIframeLocalStorage', (loadPage=true) => {
+  cy.log('getIframeLocalStorage');
+  // Future: We might already have a page loaded, so consider not always doing this
+  if (loadPage) {
+    cy.psivisit(helpers.url()).window().then(win => {
+      return new Cypress.Promise((resolve, reject) => {
+        win.psicash('init', (err, success, detail) => { // TODO: put in a const somewhere (deduplicate with the const in the spec)
+          // We don't care what the 'init' response is, just that it finished
+          win._psicash.getIframeLocalStorage((error, success, detail) => {
+            resolve(JSON.parse(detail));
+          });
+        });
+      });
+    });
+  }
+  else {
+    cy.window().then(win => {
+      return new Cypress.Promise((resolve, reject) => {
+        win.psicash('init', (err, success, detail) => { // TODO: put in a const somewhere (deduplicate with the const in the spec)
+          // We don't care what the 'init' response is, just that it finished
+          win._psicash.getIframeLocalStorage((error, success, detail) => {
+            resolve(JSON.parse(detail));
+          });
+        });
+      });
+    });
+  }
+});
+
+Cypress.Commands.add('psiTestRequestSuccess', (action, options=undefined, require200=false) => {
+  cy.log('psiTestRequestSuccess', action, options, require200);
+
+  cy.window().then(win => {
+    return new Cypress.Promise((resolve, reject) => {
+      win.psicash(action, options, (err, success, detail) => {
+        cy.log('psiTestRequestSuccess result', err, success, detail);
+
+        expect(err).to.be.null;
+        if (require200) {
+          expect(success).to.be.true;
+          if (action !== 'init') { // TODO: put in a const somewhere (deduplicate with the const in the spec)
+            expect(detail).to.equal('200');
+          } // otherwise init, which has no `detail`
+        }
+        else {
+          if (action !== 'init') { // TODO: put in a const somewhere (deduplicate with the const in the spec)
+            expect(detail).to.be.oneOf(['200', '429']);
+          } // otherwise init, which has no `detail`
+        }
+
+        resolve();
+      });
+    });
+  });
+});
+
+Cypress.Commands.add('psiTestRequestFailure', (action, expectedError, expectedDetail=null, options=undefined) => {
+  cy.log(`psiTestRequestFailure: action=${action}; expectedError=${expectedError}; options=${options}`);
+
+  cy.window().then(win => {
+    return new Cypress.Promise((resolve, reject) => {
+      win.psicash(action, options, (err, success, detail) => {
+        console.log(`psiTestRequestFailure result: action=${action}; err=${err}; success=${success}; detail=${detail}`);
+        cy.log(`psiTestRequestFailure result: action=${action}; err=${err}; success=${success}; detail=${detail}`);
+        expect(success).to.be.false;
+        if (expectedError) {
+          expect(err).to.include(expectedError);
+        }
+        if (expectedDetail) {
+          expect(detail).to.include(expectedDetail);
+        }
         resolve();
       });
     });

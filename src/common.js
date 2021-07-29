@@ -17,6 +17,9 @@
  *
  */
 
+import * as consts from './consts.js';
+import * as utils from './utils.js';
+
 /**
  * The query or hash param key for tokens, metadata, etc. passed by the app into the
  * landing page, and the page script into the iframe.
@@ -32,17 +35,15 @@ export const DEV_URL_PARAM = 'dev';
  * between the page and iframe.
  */
 export class PsiCashParams {
-  constructor(tokens, tokensPriority, metadata, dev, debug) {
+  constructor(timestamp, tokens, metadata, dev, debug) {
+    /**
+     * Timestamp of when the package was created; used to prioritize which tokens should be used.
+     * This will be undefined for params from older clients or stored previously.
+     * @type {string}
+     */
+    this.timestamp = timestamp;
     /** @type {string} */
     this.tokens = tokens;
-    /**
-     * Will be 0 for low and 1 for high. High priority
-     *   tokens come from the landing page URL (which come from the app) and supersede any
-     *   stored tokens.
-     *   See https://github.com/Psiphon-Inc/psiphon-issues/issues/432 for more details.
-     * @type {number}
-     */
-    this.tokensPriority = tokensPriority;
     /**
      * This is information that is included in requests to the PsiCash server, provided by
      * the app.
@@ -56,16 +57,92 @@ export class PsiCashParams {
   }
 
   /**
-   * Create a new PsiCashParams instance from obj.
-   * @param {Object} obj
+   * Create a new PsiCashParams instance from obj. Returns null if obj is falsy.
+   * @param {?Object} obj
    */
   static fromObject(obj) {
     if (!obj) {
       return null;
     }
 
-    let {tokens, tokensPriority, metadata, dev, debug} = obj;
-    return new PsiCashParams(tokens, tokensPriority, metadata, dev, debug);
+    const { timestamp, tokens, metadata, dev, debug } = obj;
+    return new PsiCashParams(timestamp, tokens, metadata, dev, debug);
+  }
+
+  /**
+   * Create a new PsiCashParams instance from an encoded payload string.
+   * Returns null if `payloadStr` is falsy, a parse error occurs, or the timestamp is unacceptable.
+   * @param {String} payloadStr
+   */
+  static fromURLPayload(payloadStr) {
+    if (!payloadStr) {
+      return null;
+    }
+
+    // The params payload is transferred as URL-encoded JSON (possibly base64).
+    try {
+      payloadStr = window.atob(payloadStr);
+    }
+    catch (error) {
+      // Do nothing -- not base64
+    }
+
+    let payloadObj;
+    try {
+      payloadObj = JSON.parse(payloadStr);
+    }
+    catch (error) {
+      // Don't let this just throw. We want this function to return in a controlled
+      // manner, in case there are checks to be done higher up the stack.
+      utils.log('PsiCashParams.fromURLPayload: JSON.parse failed', error);
+      return null;
+    }
+
+    const urlParams =  PsiCashParams.fromObject(payloadObj);
+    if (!urlParams) {
+      utils.log('PsiCashParams.fromURLPayload: fromObject returned null');
+      return null;
+    }
+
+    // Older clients don't include a timestamp in the params, but if there is one present
+    // we have to make sure it's valid. To prevent stored-tokens-poisoning attacks
+    // (https://github.com/Psiphon-Inc/psiphon-issues/issues/555), we don't want to accept
+    // any URL params that have a timestamp too far in the past (because it should have
+    // just been generated, not a link in an email or something), nor in the future (we
+    // don't want bad tokens to get stored forever and never be flushed out by good
+    // tokens).
+    if (urlParams.timestamp) {
+      const nowTimestamp = new Date().getTime();
+      const urlTimestamp = Date.parse(urlParams.timestamp);
+      if (isNaN(urlTimestamp)) {
+        utils.log('PsiCashParams.fromURLPayload: URL params timestamp cannot be parsed');
+        return null;
+      }
+      if (urlTimestamp > nowTimestamp) {
+        utils.log('PsiCashParams.fromURLPayload: URL params timestamp is in the future');
+        return null;
+      }
+
+      // We need to give enough time for the app to send the URL to the browser (fast),
+      // the browser to load the page and start processing JS (slow), and the page to send
+      // load the iframe (slow-ish). If we don't give enough time for that, then the user
+      // can't do anything with their tokens. But if we leave _too much_ time, then an
+      // attacker has too big a window to poison a user's tokens.
+      if ((nowTimestamp - urlTimestamp) > 60000) {
+        utils.log('PsiCashParams.fromURLPayload: URL params timestamp is too old');
+        return null;
+      }
+    }
+
+    return urlParams;
+  }
+
+  /**
+   * Returns the base64-encoded JSON of this object.
+   * @returns {!String}
+   */
+  encode() {
+    return window.btoa(JSON.stringify(this)).replace(/=+$/, '');
   }
 
   /**
@@ -75,6 +152,43 @@ export class PsiCashParams {
    */
   equal(cmp) {
     return JSON.stringify(this) === JSON.stringify(cmp);
+  }
+
+  /**
+   * Compares `urlParams` and `localParams` and returns the object that has the newest tokens.
+   * Comparing timestamps is preferred, otherwise `urlParams` takes priority (as it's
+   * more likely to be new than the locally-stored params).
+   * Returns null if both are null.
+   * @param {?PsiCashParams} urlParams
+   * @param {?PsiCashParams} localParams
+   * @returns {?PsiCashParams}
+   */
+  static newest(urlParams, localParams) {
+    if (!urlParams || !localParams) {
+      // May return null
+      return urlParams || localParams;
+    }
+    else if (urlParams.timestamp && localParams.timestamp) {
+      // Both param sets have timestamps, so we can compare based on them
+      return (urlParams.timestamp > localParams.timestamp) ? urlParams : localParams;
+    }
+    else if (!!urlParams.timestamp !== !!localParams.timestamp) {
+      // One of the params has a timestamp and one doesn't; the one with the timestamp
+      // comes from a more recent client version and is considered newer.
+      // The null-ness of the tokens doesn't matter in this case. A possible scenario is
+      // that there are old timestampless params in widget storage and new timestamped
+      // params in the URL, with no tokens because the client is logged out. We still want
+      // to prefer the URL params in this case, as they're newer and the the timestampless
+      // params probably belong to a tracker that has been merged.
+      return urlParams.timestamp ? urlParams : localParams;
+    }
+    else if (!!urlParams.tokens !== !!localParams.tokens) {
+      // If neither has a timestamp, and one has tokens and the other doesn't, use the tokens.
+      return urlParams.tokens ? urlParams : localParams;
+    }
+
+    // Neither have timestampns, and either both or neither have tokens. Prefer the URL params.
+    return urlParams;
   }
 }
 
@@ -87,12 +201,11 @@ export class Message {
    * @param {string} type
    * @param {number} timeout
    * @param {any} payload
-   * @param {Object} storage
    * @param {string} error
    * @param {boolean} success
    * @param {string} detail
    */
-  constructor(type, timeout=null, payload=null, storage=null, error=null, success=true, detail='') {
+  constructor(type, timeout=null, payload=null, error=null, success=true, detail='') {
     /** @type {string} */
     this.id = String(Math.random());
     /** @type {string} */
@@ -104,8 +217,6 @@ export class Message {
     this.timeout = timeout;
     /** @type {any} */
     this.payload = payload;
-    /** @type {Object} */
-    this.storage = storage;
 
     /**
      * If this is set, an unrecoverable error has occurred.
@@ -149,254 +260,10 @@ export class Message {
       return null;
     }
     let j = JSON.parse(jsonString);
-    let m = new Message(j.type, j.timeout, j.payload, j.storage, j.error, j.success, j.detail);
+    let m = new Message(j.type, j.timeout, j.payload, j.error, j.success, j.detail);
     // The JSON will have its own id
     m.id = j.id;
     return m;
-  }
-}
-
-/**
- * Prefix added to the everything stored in localStorage (to prevent conflicts with other page stuff.)
- * @const {string}
- */
-const LOCALSTORAGE_KEY_PREFIX = 'PsiCash::v2::';
-const LOCALSTORAGE_KEY_PREFIX_DEV = 'PsiCash-Dev::v2::';
-
-/**
- * Storage key for getting/settings PsiCashParams.
- * @const {string}
- */
-export const PARAMS_STORAGE_KEY = 'PsiCashParams';
-
-/**
- * Construct a localStorage key based on the given suffix.
- * @param {string} keySuffix The unique part of the key. Will be appended to the prefix.
- * @param {any} dev Truthy value indicating if the widget is currently talking to a dev server.
- * @returns {string}
- */
-function localStorageKey(keySuffix, dev) {
-  const keyPrefix = dev ? LOCALSTORAGE_KEY_PREFIX_DEV : LOCALSTORAGE_KEY_PREFIX;
-  if (keySuffix.indexOf(keyPrefix) !== 0) {
-    keySuffix = keyPrefix + keySuffix;
-  }
-
-  return keySuffix;
-}
-
-let localStorageOKLogged = false;
-/**
- * Check if we can use localStorage. This is commonly the case when privacy-enchanced
- * browsers (Brave, or Chrome with certain settings) deny access to it from iframes.
- * @returns {boolean}
- */
-function localStorageOK() {
-  try {
-    if (!window.localStorage) {
-      if (!localStorageOKLogged) {
-        log('window.localStorage unavailable');
-        localStorageOKLogged = true;
-      }
-      return false;
-    }
-  }
-  catch (e) {
-    // Attempting to access window.localStorage may throw an exception. See:
-    // https://www.chromium.org/for-testers/bug-reporting-guidelines/uncaught-securityerror-failed-to-read-the-localstorage-property-from-window-access-is-denied-for-this-document
-    if (!localStorageOKLogged) {
-      log('window.localStorage inaccessible: ' + e);
-      localStorageOKLogged = true;
-    }
-    return false;
-  }
-  return true;
-}
-
-/**
- * Retrieve data from local storage.
- * @param {!string} key
- * @param {any} dev Truthy, indicates if this is using PsiCash-Dev rather than Prod.
- * @returns {?any} null if the key wasn't set (or if null was stored).
- */
-export function storageGet(key, dev) {
-  if (!localStorageOK()) {
-    return null;
-  }
-
-  key = localStorageKey(key, dev);
-
-  let val = window.localStorage.getItem(key);
-  if (typeof val === 'string') {
-    val = JSON.parse(val);
-  }
-  return val;
-}
-
-/**
- * Sets val into local storage at key.
- * @param {!string} key
- * @param {any} val
- * @param {any} dev Truthy, indicates if this is using PsiCash-Dev rather than Prod.
- */
-export function storageSet(key, val, dev) {
-  if (!localStorageOK()) {
-    return;
-  }
-
-  key = localStorageKey(key, dev);
-
-  window.localStorage.setItem(key, JSON.stringify(val));
-}
-
-/**
- * Merges the keys of obj into localstorage, selectively overwriting according to preferObj.
- * @param {Object} obj
- * @param {boolean} preferObj If true, will always overwrite.
- * @param {any} dev Truthy, indicates if this is using PsiCash-Dev rather than Prod.
- */
-export function storageMerge(obj, preferObj, dev) {
-  for (let k of Object.keys(obj)) {
-    if (!preferObj && storageGet(k, dev)) {
-      // There's already a locally-stored item with this key
-      continue;
-    }
-
-    storageSet(k, obj[k], dev);
-  }
-}
-
-/**
- * Logs arguments to console.
- * Just a wrapper for console.log to prevent trying to use it if it doesn't exist.
- */
-export function log() {
-  let argsArray = Array.prototype.slice.call(arguments);
-  argsArray.unshift('PsiCash:');
-  if (window.console) {
-    window.console.log.apply(null, argsArray);
-  }
-}
-
-/**
- * Logs an error to console.
- * Just a wrapper for console.error to prevents trying to use it if it doesn't exist.
- */
-export function error() {
-  let argsArray = Array.prototype.slice.call(arguments);
-  argsArray.unshift('PsiCash:');
-  if (window.console) {
-    let logger = window.console.error || window.console.log;
-    logger.apply(null, argsArray);
-  }
-}
-
-/**
- * Splits the given URL into components that can be accessed with `result.hash`, etc.
- * @param {string} url
- * @returns {HTMLAnchorElement}
- */
-export function urlComponents(url) {
-  const parser = document.createElement('a');
-  parser.href = url;
-  return parser;
-}
-
-/**
- * Get the host string from urlComp in a way that is consistent across platforms.
- * @param {!HTMLAnchorElement} urlComp
- * @returns {!string}
- */
-export function getHost(urlComp) {
-  // IE puts the port on urlComp.host, while Chrome only puts it there for
-  // non-standard ports. We want the Chrome behaviour.
-  if (String(urlComp.port) !== '' && String(urlComp.port) !== '80' && String(urlComp.port) !== '443') {
-    return urlComp.hostname + ':' + urlComp.port;
-  }
-  else {
-    return urlComp.hostname;
-  }
-}
-
-/**
- * Get the origin string from urlComp in a way that is consistent across platforms.
- * @param {!HTMLAnchorElement} urlComp
- * @returns {!string}
- */
-export function getOrigin(urlComp) {
-  // urlComp.origin is not widely supported.
-  return urlComp.protocol + '//' + getHost(urlComp);
-}
-
-/**
- * Get the param value for the given name from the URL hash or query.
- * Returns null if not found.
- * @param {string} url
- * @param {string} name
- * @returns {?string}
- */
-export function getURLParam(url, name) {
-  const urlComp = urlComponents(url);
-
-  // urlComp.search is like "?psicash=etc"
-  const qp = urlComp.search.slice(1);
-  // urlComp.hash is like "#psicash=etc" or "#!psicash=etc"
-  let hash = urlComp.hash.slice(1);
-  if (hash.slice(0, 1) === '!') {
-    hash = hash.slice(1);
-  }
-
-  const paramLocations = [hash, qp];
-
-  const reString = '(?:^|&)' + name + '=(.+?)(?:&|$)';
-  const re = new RegExp(reString);
-
-  let match;
-  for (let i = 0; i < paramLocations.length; i++) {
-    match = re.exec(paramLocations[i]);
-    if (match) {
-      return decodeURIComponent(match[1]);
-    }
-  }
-
-  return null;
-}
-
-/**
- * Get the src from the current script's tag. This can be used for retrieving params.
- * @returns {string}
- */
-export function getCurrentScriptURL() {
-  const thisScript = document.currentScript || document.querySelector('script[src*="psicash.js"]');
-
-  // Give TS error: "Property 'src' does not exist on type 'HTMLScriptElement | SVGScriptElement'."
-  // But we know it's the former (which has a src) and not the latter.
-  // @ts-ignore
-  return thisScript.src;
-}
-
-/**
- * Check if the code is in the widget iframe (vs the widget page code).
- * @returns {boolean}
- */
-export function inWidgetIframe() {
-  // We're not going to do an inIFrame() check because it returns an incorrect result
-  // during Cypress testing, and because it doesn't add any extra important info to the check.
-
-  const scriptURLComp = urlComponents(getCurrentScriptURL());
-  const pageURLComp = urlComponents(location.href);
-  return getHost(scriptURLComp) === getHost(pageURLComp);
-}
-
-/**
- * Check if the current script is running in an iframe.
- * From: https://stackoverflow.com/a/326076
- * @returns {boolean}
- */
-export function inIframe() {
-  try {
-    return window.self !== window.top;
-  } catch (e) {
-    return true;
   }
 }
 
@@ -432,7 +299,112 @@ export function PsiCashActionDefaultTimeout(action) {
   case PsiCashAction.PageView:
     return 10000;
   case PsiCashAction.ClickThrough:
+    // This is typically going to block the next page from loading, so we don't want it to take too long.
     return 1000;
   }
   return 2000;
+}
+
+/**
+ * Callback for when an iframe message is done being processed.
+ * @callback PsiCashServerRequestCallback
+ * @param {Object} result
+ * @param {?string} result.error Null if no error, otherwise has error message
+ * @param {number} result.status Like 200, 401, etc. (but not 5xx -- that will just populate `error`)
+ * @param {string} result.body The body of the response
+ */
+
+/**
+ * @param {Object} config Configuration for the request
+ * @param {!PsiCashServerRequestCallback} config.callback
+ * @param {!PsiCashParams} config.psicashParams
+ * @param {number} config.timeout Milliseconds; if falsy, a default will be used
+ * @param {!string} config.path Like `/transaction`
+ * @param {!string} config.method Like `GET`, `POST`, etc.
+ * @param {!string} config.queryParams In `a=b&c=d` form
+ */
+export function makePsiCashServerRequest(config) {
+  return makePsiCashServerRequestHelper(config);
+}
+
+function makePsiCashServerRequestHelper(config, start=Date.now(), attempt=1, lastError=null) {
+  // We're going to interpret "no timeout" as 100s.
+  config.timeout = config.timeout || 100000;
+  const remainingTime = config.timeout - (Date.now() - start);
+
+  function recurse() {
+    if (remainingTime < 0) {
+      // We failed all of our attempts and ran out of time.
+      const cbResult = {
+        error: lastError || 'timed out'
+      };
+      config.callback(cbResult);
+      return;
+    }
+
+    // Wait 100ms and try again.
+    setTimeout(() => makePsiCashServerRequestHelper(config, start, attempt+1, lastError), 100);
+  }
+
+  // We're going to be modifying this object as we make request attempts, so clone it.
+  config.psicashParams = JSON.parse(JSON.stringify(config.psicashParams));
+
+  // We need the request metadata to exist to record the attempt count.
+  if (!config.psicashParams.metadata) {
+    config.psicashParams.metadata = {};
+  }
+  config.psicashParams.metadata.attempt = attempt;
+
+  // For logging and debugging purposes, record the referrer in the metadata, but _not_
+  // with any potentially-identifying query params or hash.
+  const pageOrigin = utils.getOrigin(utils.urlComponents(document.referrer));
+  config.psicashParams.metadata.referrer = pageOrigin + utils.urlComponents(document.referrer).pathname;
+
+  const psicashAPIPrefix = config.psicashParams.dev ? consts.PSICASH_API_PREFIX_DEV : consts.PSICASH_API_PREFIX;
+  let reqURL = `${psicashAPIPrefix}${config.path}`;
+  if (config.queryParams) {
+    reqURL += `?${config.queryParams}`;
+  }
+
+  let xhr = new(window.XMLHttpRequest || window.ActiveXObject)('MSXML2.XMLHTTP.3.0');
+  xhr.open(config.method, reqURL, true);
+  xhr.timeout = remainingTime;
+  xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+  xhr.setRequestHeader('X-PsiCash-Auth', config.psicashParams.tokens);
+  xhr.setRequestHeader('X-PsiCash-Metadata', JSON.stringify(config.psicashParams.metadata));
+
+  xhr.onload = function xhrOnLoad() {
+    utils.log(xhr.status, xhr.statusText, xhr.responseText, `dev-env:${!!config.psicashParams.dev}`);
+
+    if (xhr.status >= 500) {
+      // Retry
+      utils.log(`Request to '${config.path}' failed with 500; retrying`, `dev-env:${!!config.psicashParams.dev}`);
+      lastError = `server error ${xhr.status}`;
+      return recurse();
+    }
+
+    utils.log(`Request to '${config.path}' completed with ${xhr.status}`, `dev-env:${!!config.psicashParams.dev}`);
+
+    const cbResult = {
+      status: xhr.status,
+      body: xhr.responseText
+    };
+    config.callback(cbResult);
+  };
+
+  xhr.onerror = function xhrOnError() {
+    // Retry
+    utils.log(`Request to '${config.path}' error; retrying`, `dev-env:${!!config.psicashParams.dev}`);
+    lastError = 'request error';
+    return recurse();
+  };
+
+  xhr.ontimeout = function xhrOnTimeout() {
+    // Retry
+    utils.log(`Request to '${config.path}' timeout`, `dev-env:${!!config.psicashParams.dev}`);
+    lastError = 'request timeout';
+    return recurse();
+  };
+
+  xhr.send(null);
 }

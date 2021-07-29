@@ -17,7 +17,10 @@
  *
  */
 
-import * as common from './common.js';
+import '../polyfills.js';
+import * as consts from '../consts.js';
+import * as utils from '../utils.js';
+import * as common from '../common.js';
 
 /**
  * The URL of the widget iframe.
@@ -27,22 +30,15 @@ const IFRAME_URL_PATH = '/v2/iframe.html';
 const IFRAME_URL_PATH_DEBUG = '/v2/iframe.debug.html'; // DEBUG
 
 /**
- * The key under which data will be stored for the iframe (to get around
- * non-persistent iframe storage on Safari).
- * @const {string}
- */
-const IFRAME_STORAGE = 'iframeStorage';
-
-/**
  * The URL of this script.
  */
-const scriptURL_ = common.getCurrentScriptURL();
+const scriptURL_ = utils.getCurrentScriptURL();
 
 /**
  * The origin of the widget. This is used to ensure that messages received are coming
  * from the right place.
  */
-const widgetOrigin_ = common.getOrigin(common.urlComponents(scriptURL_));
+const widgetOrigin_ = utils.getOrigin(utils.urlComponents(scriptURL_));
 
 /**
  * The PsiCash widget iframe element. Will bet set when the iframe is created.
@@ -65,49 +61,21 @@ let psicashParams_;
  * @returns {!common.PsiCashParams}
  */
 function getPsiCashParams() {
-  // The URL for this script may dev and/or debug flags
-  const urlDebug = common.getURLParam(scriptURL_, common.DEBUG_URL_PARAM);
-  const urlDev = common.getURLParam(scriptURL_, common.DEV_URL_PARAM);
+  // The URL for this script may have dev and/or debug flags
+  const urlDebug = utils.getURLParam(scriptURL_, common.DEBUG_URL_PARAM);
+  const urlDev = utils.getURLParam(scriptURL_, common.DEV_URL_PARAM);
 
-  /** @type {common.PsiCashParams} */
-  let urlPsiCashParams, localPsiCashParams, finalPsiCashParams;
+  // We'll look in the URL and in localStorage for the payload, preferring the one with the newest tokens
 
-  // We'll look in the URL and in localStorage for the payload, but we'll prefer
-  // the URL, because it's where tokens will get updated when they change.
-  // The params payload is transferred as URL-encoded JSON (possibly base64).
-
-  let urlPayload = common.getURLParam(location.href, common.PSICASH_URL_PARAM);
-
-  // Check if the payload is base64-encoded
-  try {
-    if (urlPayload) {
-      urlPayload = window.atob(urlPayload);
-    }
-  }
-  catch (error) {
-    // Do nothing -- not base64
-  }
-
-  urlPayload = JSON.parse(urlPayload);
-
-  if (urlPayload) {
-    urlPsiCashParams = common.PsiCashParams.fromObject(urlPayload);
-    if (urlPsiCashParams.tokens) {
-      urlPsiCashParams.tokensPriority = 1; // URL tokens have higher priority
-    }
-  }
+  const urlPayload = utils.getURLParam(location.href, common.PSICASH_URL_PARAM);
+  const urlPsiCashParams = common.PsiCashParams.fromURLPayload(urlPayload);
 
   // Figure out if we should be looking in dev or prod storage for stored params
   const useDevStorage =  (urlDev !== null && urlDev) || (urlPsiCashParams && urlPsiCashParams.dev);
+  const localPayload = utils.storageGet(consts.PARAMS_STORAGE_KEY, useDevStorage);
+  const localPsiCashParams = common.PsiCashParams.fromObject(localPayload);
 
-  let localPayload = common.storageGet(common.PARAMS_STORAGE_KEY, useDevStorage);
-  if (localPayload) {
-    localPsiCashParams = common.PsiCashParams.fromObject(localPayload);
-    localPsiCashParams.tokensPriority = 0; // Locally-stored tokens have lower priority
-  }
-
-  // Prefer the payload from the URL.
-  finalPsiCashParams = urlPsiCashParams || localPsiCashParams || new common.PsiCashParams();
+  const finalPsiCashParams = common.PsiCashParams.newest(urlPsiCashParams, localPsiCashParams) || new common.PsiCashParams();
 
   if (urlDebug !== null) {
     finalPsiCashParams.debug = urlDebug;
@@ -117,8 +85,8 @@ function getPsiCashParams() {
   }
 
   // Side-effect: Store the params locally, if available and different.
-  if (finalPsiCashParams && !finalPsiCashParams.equal(localPsiCashParams)) {
-    common.storageSet(common.PARAMS_STORAGE_KEY, finalPsiCashParams, useDevStorage);
+  if (!finalPsiCashParams.equal(localPsiCashParams)) {
+    utils.storageSet(consts.PARAMS_STORAGE_KEY, finalPsiCashParams, useDevStorage);
   }
 
   return finalPsiCashParams;
@@ -129,7 +97,7 @@ function getPsiCashParams() {
  */
 function loadIframe() {
   const iframeURLPath = psicashParams_.debug ? IFRAME_URL_PATH_DEBUG : IFRAME_URL_PATH;
-  const paramsString = encodeURIComponent(JSON.stringify(psicashParams_));
+  const paramsString = psicashParams_.encode();
   let iframeSrc = `${widgetOrigin_}${iframeURLPath}#!`;
   iframeSrc += `${common.PSICASH_URL_PARAM}=${paramsString}`;
   if (psicashParams_.dev !== null && psicashParams_.dev !== undefined) {
@@ -147,7 +115,7 @@ function loadIframe() {
   iframeElement_.referrerPolicy = 'no-referrer-when-downgrade';
 
   if (psicashParams_.debug) {
-    iframeElement_.style.cssText = 'width:400px;height:400px;';
+    iframeElement_.style.cssText = 'width:90%;height:600px;';
   }
   else {
     // Make invisible.
@@ -158,9 +126,8 @@ function loadIframe() {
 }
 
 /**
- * Callback for adding two numbers.
- *
- * @callback ActionCallback
+ * Callback for when an iframe message is done being processed.
+ * @callback ActionMessageCallback
  * @param {string} error
  * @param {boolean} success
  * @param {string} detail
@@ -168,21 +135,21 @@ function loadIframe() {
 
 /**
  * Callbacks waiting for PsiCash operations being processed by the iframe.
- * @type {Object.<string, ActionCallback>}
+ * @type {Object.<string, ActionMessageCallback>}
  */
 let pendingMessageCallbacks_ = {};
 
 /**
  * Does necessary processing on a message received from the iframe.
- * @param {object} eventData
+ * @param {Object} eventData
  */
 function processIframeMessage(eventData) {
   const msg = JSON.parse(eventData);
 
-  common.log('iframe message:', msg.type, msg);
+  utils.log('iframe message:', msg.type, JSON.stringify(msg));
 
   if (msg.error) {
-    common.error(msg.error);
+    utils.error(msg.error);
   }
 
   // NOTE: Don't return early from these cases unless you're certain there can't
@@ -190,10 +157,6 @@ function processIframeMessage(eventData) {
   if (msg.type === 'ready') {
     // We can now start passing on requests rather than queuing them up.
     setUpPsiCashTag();
-  }
-  else if (msg.type === 'store') {
-    // In Safari, iframe's don't have persistent storage, so we'll store stuff for it.
-    common.storageSet(IFRAME_STORAGE, msg.data, psicashParams_.dev);
   }
   else if (msg.type === psicash.Action.Init) {
     // Indicates that the request completed (successfully or not).
@@ -203,6 +166,9 @@ function processIframeMessage(eventData) {
   }
   else if (msg.type === psicash.Action.ClickThrough) {
     // Indicates that the request completed (successfully or not).
+  }
+  else if (msg.type === 'debug-localStorage::get') {
+    msg.detail = JSON.stringify(msg.payload);
   }
 
   if (msg.id && pendingMessageCallbacks_[msg.id]) {
@@ -216,7 +182,7 @@ function processIframeMessage(eventData) {
  * @param {!string} type The message type
  * @param {?number} timeout The time allowed for the message processing (not always applicable)
  * @param {?any} payload
- * @param {?ActionCallback} callback
+ * @param {?ActionMessageCallback} callback
  * @returns {!common.Message} The message object sent.
  */
 function sendMessageToIframe(type, timeout, payload, callback) {
@@ -225,7 +191,7 @@ function sendMessageToIframe(type, timeout, payload, callback) {
     return;
   }
 
-  const msg = new common.Message(type, timeout, payload, common.storageGet(IFRAME_STORAGE, psicashParams_.dev));
+  const msg = new common.Message(type, timeout, payload);
 
   if (callback) {
     pendingMessageCallbacks_[msg.id] = callback;
@@ -240,34 +206,18 @@ function sendMessageToIframe(type, timeout, payload, callback) {
 }
 
 /**
- * Clear localStorage for page and/or iframe. Used when testing.
- * @param {boolean} page Clear page localStorage.
- * @param {boolean} iframe Clear iframe localStorage
- * @param {?ActionCallback} callback Callback to fire when clearing is complete.
- */
-function clearLocalStorage(page, iframe, callback) {
-  if (page) {
-    window.localStorage.clear();
-  }
-
-  if (iframe) {
-    sendMessageToIframe('clear-localStorage', null, null, callback);
-  }
-  else {
-    // Ensure the callback is asynchronous.
-    setTimeout(callback, 1);
-  }
-}
-exposeToWindow(true, clearLocalStorage, 'clearLocalStorage');
-
-/**
  * Expose a function to the page, on `window._psicash`.
- * @param {boolean} debugOnly Only exposes the function if debug mode is detected.
+ * If `prodAllowed` and `devAllowed` are both false, the function will only be exposed in
+ * local testing builds.
+ * @param {boolean} prodAllowed Exposes the function in prod builds.
+ * @param {boolean} devAllowed Exposes the function in dev builds.
  * @param {function} func
  * @param {string} funcName
  */
-function exposeToWindow(debugOnly, func, funcName) {
-  if (debugOnly && !window.Cypress) {
+function exposeToWindow(prodAllowed, devAllowed, func, funcName) {
+  if (!prodAllowed
+      && !(devAllowed && consts.isDevBuild())
+      && !consts.LOCAL_TESTING_BUILD) {
     return;
   }
   window._psicash = window._psicash || {};
@@ -279,7 +229,7 @@ function exposeToWindow(debugOnly, func, funcName) {
  * @public
  * @param {!psicash.Action} action The action to perform. Required.
  * @param {?Object} obj Optional.
- * @param {?ActionCallback} callback Optional.
+ * @param {?ActionMessageCallback} callback Optional.
  */
 function psicash(action, obj, callback) {
   if (!common.PsiCashActionValid(action)) {
@@ -290,12 +240,28 @@ function psicash(action, obj, callback) {
     callback = obj;
     obj = {};
   }
-  obj = obj || {};
+  obj = obj ?? {};
 
   /** @type {?number} */
   let timeout = obj.timeout;
   if (typeof timeout !== 'number') {
     timeout = common.PsiCashActionDefaultTimeout(action);
+  }
+
+  // No matter how catastrophically the rest of the code path fails, we still want to call
+  // the callback by the timeout.
+  if (callback) {
+    const origCallback = callback;
+    let callbackCalled = false;
+    callback = function callbackWrapper() {
+      if (callbackCalled) {
+        return;
+      }
+      callbackCalled = true;
+      origCallback.apply(this, arguments);
+    };
+
+    setTimeout(() => callback('timed out', false, 'safety timeout hit'), timeout);
   }
 
   const msg = sendMessageToIframe(action, timeout, obj, callback);
@@ -308,7 +274,7 @@ function psicash(action, obj, callback) {
       // We can determine if the callback should be called if it's still in
       // pendingMessageCallbacks_.
       if (msg.id && pendingMessageCallbacks_[msg.id]) {
-        common.log('action timed out: ' + action);
+        utils.log('action timed out: ' + action);
         // The callback has NOT already been called.
         pendingMessageCallbacks_[msg.id](null, false, 'timeout');
         // Delete the callback so it isn't called again.
@@ -331,7 +297,7 @@ psicash.Action = common.PsiCashAction;
  */
 function setUpPsiCashTag() {
   if (!window.psicash) {
-    common.error('Improperly configured; window.psicash must be present; see usage instructions');
+    utils.error('Improperly configured; window.psicash must be present; see usage instructions');
     return;
   }
 
@@ -350,7 +316,7 @@ function setUpPsiCashTag() {
 
 // Do the work.
 (function pageInitialize() {
-  if (common.inWidgetIframe()) {
+  if (utils.inWidgetIframe()) {
     // Nothing for the page script to do
     return;
   }
@@ -358,7 +324,7 @@ function setUpPsiCashTag() {
   // Disallow this widget from being loaded into an iframe. This isn't a restriction of
   // the widget so much as a mitigation against an earning attack that iframes our landing
   // pages. See: https://github.com/Psiphon-Inc/psiphon-issues/issues/554
-  if (common.inIframe()) {
+  if (utils.inIframe()) {
     throw new Error('The widget must not be put in an iframe');
   }
 
@@ -367,7 +333,9 @@ function setUpPsiCashTag() {
   // Widget-using pages sometimes need to access client platform and version in order to
   // decide what to show, etc. We'll expose a copy of our parameters -- the metadata
   // contains that info.
-  exposeToWindow(false, () => JSON.parse(JSON.stringify(psicashParams_)), 'params');
+  // NOTE: This is only exposing information that is already available to this page, just
+  // in a more accessible form.
+  exposeToWindow(true, true, () => JSON.parse(JSON.stringify(psicashParams_)), 'params');
 
   // The iframe script will inform us when the next allowed reward is.
   window.addEventListener('message', function pageMessageHandler(event) {
@@ -380,3 +348,44 @@ function setUpPsiCashTag() {
 
   loadIframe();
 })();
+
+/////////////////////
+// Testing-only code
+
+/**
+ * Clear localStorage for page and/or iframe. Used when testing.
+ * @param {boolean} page Clear page localStorage.
+ * @param {boolean} iframe Clear iframe localStorage
+ * @param {?ActionMessageCallback} callback Callback to fire when clearing is complete.
+ */
+function clearLocalStorage(page, iframe, callback) {
+  if (page) {
+    utils.log('page local storage clearing', window.localStorage.length, 'key(s)');
+    window.localStorage.clear();
+  }
+
+  if (iframe) {
+    sendMessageToIframe('debug-localStorage::clear', null, null, callback);
+  }
+  else {
+    // Ensure the callback is asynchronous.
+    setTimeout(callback, 1);
+  }
+
+  // It's silly to call this with both params being false, but...
+  if (!page && !iframe) {
+    // Ensure the callback is asynchronous.
+    setTimeout(callback, 1);
+  }
+}
+exposeToWindow(false, true, clearLocalStorage, 'clearLocalStorage');
+
+/**
+ * Get a dump of the iframe's localStorage. Used when testing.
+ * @param {?ActionMessageCallback} callback Callback to fire when retrieval is complete.
+ *    The `detail` argument will be the JSON-encoded contents of localStorage.
+ */
+function getIframeLocalStorage(callback) {
+  sendMessageToIframe('debug-localStorage::get', null, null, callback);
+}
+exposeToWindow(false, false, getIframeLocalStorage, 'getIframeLocalStorage');
