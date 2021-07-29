@@ -130,7 +130,7 @@ function deployProd(callback) {
     output: process.stdout
   });
 
-  readline.question('You are attempted to deploy to prod. Are you sure? ', response => {
+  readline.question('You are attempting to deploy to prod. Are you sure? ', response => {
     readline.close();
     if (response !== 'yes') {
       callback(new Error('Response is not "yes"; aborting'));
