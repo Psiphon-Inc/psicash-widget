@@ -150,7 +150,16 @@ export function log() {
   let argsArray = Array.prototype.slice.call(arguments);
   argsArray.unshift('PsiCash:');
   if (window.console) {
-    window.console.log.apply(null, argsArray);
+    // NOTE: IE11 throws an exception if window.console.log.apply is called _and_ DevTools
+    // is not open, even though console.log is defined. (But no error if DevTools is open.)
+    // We'll try to log pretty (not the array) and fall back to calling console.log directly
+    // if that fails.
+    try {
+      window.console.log.apply(window.console, argsArray);
+    }
+    catch (e) {
+      window.console.log(argsArray);
+    }
   }
 }
 

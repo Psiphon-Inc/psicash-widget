@@ -82,6 +82,7 @@ Additional general rules:
 | good          | invalid, newer              | none                |                       | 401             |                       |
 | good          | invalid, older              | no change           |                       | 200             |                       |
 | invalid       | none/old/older/no timestamp | none                |                       | 401             |                       |
+| tokens:null   | none/old/older/no timestamp | tokens:null         |                       | none            | "no tokens available" |
 | invalid       | newer                       | new tokens          |                       | 200             |                       |
 
 ### Shopify
